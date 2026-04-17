@@ -215,10 +215,8 @@ function extractTallyFields(payload: TallyWebhookPayload): SisPayload & { garmen
       "Rows per 10 cm": "Gauge_row",
       "Ease/fit preference": "Ease_preference",
       "Length preference": "Length_preference",
-      "Front neck depth (cm)": "Front_neck_depth_for_V_cm",
+      "V-neck depth (cm) — measure from shoulder to where the V ends on a well-fitting garment, NOT measuring any neckband": "Front_neck_depth_for_V_cm",
       "Sleeve length (cm)": "Sleeve_length_cm",
-      "Cuff preference": "Cuff_preference",
-      "Cuff height (cm)": "Cuff_height_cm",
       "Garment type": "garment_type",
     };
 
