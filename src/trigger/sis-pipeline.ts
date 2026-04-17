@@ -12,7 +12,8 @@ interface SisPayload {
   Length_preference: string;
   Front_neck_depth_for_V_cm: number;
   Sleeve_length_cm: number;
-  }
+  construction_method?: string;
+}
 
 interface TallyWebhookPayload {
   data: {
@@ -167,8 +168,6 @@ export const sisPipelineTask = task({
 });
 
 // ── Tally webhook handler task ───────────────────────────────────────
-// This task receives the raw Tally webhook, parses it,
-// and triggers the main pipeline task.
 
 export const tallyWebhookTask = task({
   id: "tally-webhook-handler",
@@ -182,15 +181,15 @@ export const tallyWebhookTask = task({
       throw new Error(fields.error);
     }
 
-    // Only process SIS submissions
-    if (fields.garment_type && fields.garment_type !== "set_in_sleeve") {
-      logger.log("Skipping non-SIS submission", { garment_type: fields.garment_type });
-      return { status: "skipped", reason: "not_sis" };
-    }
+    logger.log("Tally fields extracted", {
+      bust: fields.Bust_cm,
+      ease: fields.Ease_preference,
+      construction: fields.construction_method,
+    });
 
-    // Trigger the main pipeline
+    // Trigger the main SIS pipeline
     const handle = await sisPipelineTask.trigger(fields);
-    logger.log("Pipeline triggered", { runId: handle.id });
+    logger.log("SIS pipeline triggered", { runId: handle.id });
 
     return { status: "triggered", runId: handle.id };
   },
@@ -198,17 +197,18 @@ export const tallyWebhookTask = task({
 
 // ── Field extraction ─────────────────────────────────────────────────
 
-function extractTallyFields(payload: TallyWebhookPayload): SisPayload & { garment_type?: string; error?: string } {
+function extractTallyFields(payload: TallyWebhookPayload): SisPayload & { error?: string } {
   try {
     const result: any = {};
 
+    // Email field
     const emailField = payload.data?.fields?.find(
       (f) => f.type === "INPUT_EMAIL" || f.label?.toLowerCase().includes("email")
     );
     if (emailField) result.email = emailField.value;
 
-    // Map Tally field labels → calculator input names
-    // ⚠️ Update these labels to match your exact Tally form field labels
+    // Field label → calculator input name mapping
+    // Labels must match exactly what Tally sends in the webhook payload
     const fieldMap: Record<string, string> = {
       "Bust/chest measurement (cm)": "Bust_cm",
       "Stitches per 10 cm": "Gauge_st",
@@ -216,13 +216,13 @@ function extractTallyFields(payload: TallyWebhookPayload): SisPayload & { garmen
       "Ease/fit preference": "Ease_preference",
       "Length preference": "Length_preference",
       "V-neck depth (cm) — measure from shoulder to where the V ends on a well-fitting garment, NOT measuring any neckband": "Front_neck_depth_for_V_cm",
-      "Sleeve length (cm)": "Sleeve_length_cm",
-      "Garment type": "garment_type",
+      "Sleeve length (cm) — measure on a well-fitting garment from cuff to shoulder seem": "Sleeve_length_cm",
+      "How would you like to knit it?": "construction_method",
     };
 
     const numericFields = new Set([
       "Bust_cm", "Gauge_st", "Gauge_row",
-      "Front_neck_depth_for_V_cm", "Sleeve_length_cm", "Cuff_height_cm",
+      "Front_neck_depth_for_V_cm", "Sleeve_length_cm",
     ]);
 
     for (const field of payload.data?.fields || []) {
@@ -234,13 +234,14 @@ function extractTallyFields(payload: TallyWebhookPayload): SisPayload & { garmen
       result[key] = val;
     }
 
+    // Validate required fields
     const required = [
       "Bust_cm", "Gauge_st", "Gauge_row", "Ease_preference",
       "Length_preference", "Front_neck_depth_for_V_cm", "Sleeve_length_cm",
     ];
 
     for (const r of required) {
-      if (result[r] === undefined || result[r] === null || result[r] === "") {
+      if (result[r] === undefined || result[r] === null || result[r] === "" || Number.isNaN(result[r])) {
         return { error: `Missing required field: ${r}` } as any;
       }
     }
