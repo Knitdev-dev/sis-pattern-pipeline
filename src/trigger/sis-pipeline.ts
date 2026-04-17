@@ -228,13 +228,18 @@ function extractTallyFields(payload: TallyWebhookPayload): SisPayload & { error?
     ]);
 
     for (const field of payload.data?.fields || []) {
-      const key = fieldMap[field.label];
-      if (!key) continue;
-      let val = field.value;
-      if (typeof val === "string") val = val.trim().toLowerCase();
-      if (numericFields.has(key)) val = parseFloat(val);
-      result[key] = val;
-    }
+  const key = fieldMap[field.label];
+  if (!key) continue;
+  let val = field.value;
+  // Resolve dropdown UUIDs to text
+  if (Array.isArray(val) && field.options) {
+    const matched = field.options.find((o: any) => o.id === val[0]);
+    val = matched ? matched.text : val[0];
+  }
+  if (typeof val === "string") val = val.trim().toLowerCase();
+  if (numericFields.has(key)) val = parseFloat(val);
+  result[key] = val;
+}
 
     // Validate required fields
     const required = [
