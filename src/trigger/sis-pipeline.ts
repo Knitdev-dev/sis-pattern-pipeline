@@ -220,7 +220,6 @@ function extractTallyFields(payload: TallyWebhookPayload): SisPayload & { error?
   "Front_neck_depth_for_V_cm": "Front_neck_depth_for_V_cm",
   "Sleeve_length_cm": "Sleeve_length_cm",
   "Construction_method": "construction_method",
-};
     };
 
     const numericFields = new Set([
