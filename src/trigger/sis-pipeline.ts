@@ -173,8 +173,9 @@ export const tallyWebhookTask = task({
   id: "tally-webhook-handler",
   maxDuration: 30,
 
-  run: async (payload: TallyWebhookPayload) => {
-    const fields = extractTallyFields(payload);
+  run: async (payload: any) => {
+    const tallyData = payload.payload || payload;
+    const fields = extractTallyFields(tallyData);
 
     if ("error" in fields) {
       logger.error("Failed to parse Tally payload", { error: fields.error });
