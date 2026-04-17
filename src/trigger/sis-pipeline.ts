@@ -12,9 +12,7 @@ interface SisPayload {
   Length_preference: string;
   Front_neck_depth_for_V_cm: number;
   Sleeve_length_cm: number;
-  Cuff_preference?: string;
-  Cuff_height_cm?: number;
-}
+  }
 
 interface TallyWebhookPayload {
   data: {
