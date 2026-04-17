@@ -212,14 +212,15 @@ function extractTallyFields(payload: TallyWebhookPayload): SisPayload & { error?
     // Field label → calculator input name mapping
     // Labels must match exactly what Tally sends in the webhook payload
     const fieldMap: Record<string, string> = {
-      "Bust/chest measurement (cm)": "Bust_cm",
-      "Stitches per 10 cm": "Gauge_st",
-      "Rows per 10 cm": "Gauge_row",
-      "Ease/fit preference": "Ease_preference",
-      "Length preference": "Length_preference",
-      "V-neck depth (cm) — measure from shoulder to where the V ends on a well-fitting garment, NOT measuring any neckband": "Front_neck_depth_for_V_cm",
-      "Sleeve length (cm) — measure on a well-fitting garment from cuff to shoulder seem": "Sleeve_length_cm",
-      "How would you like to knit it?": "construction_method",
+  "Bust/chest measurement (cm)": "Bust_cm",
+  "Stitches per 10 cm": "Gauge_st",
+  "Rows per 10 cm": "Gauge_row",
+  "Ease/fit preference": "Ease_preference",
+  "Length preference": "Length_preference",
+  "Front_neck_depth_for_V_cm": "Front_neck_depth_for_V_cm",
+  "Sleeve_length_cm": "Sleeve_length_cm",
+  "Construction_method": "construction_method",
+};
     };
 
     const numericFields = new Set([
