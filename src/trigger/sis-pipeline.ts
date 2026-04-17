@@ -175,6 +175,7 @@ export const tallyWebhookTask = task({
 
   run: async (payload: any) => {
     const tallyData = payload.payload || payload;
+    logger.log("Raw fields", { f: JSON.stringify(tallyData.data?.fields?.map((f:any) => f.label)) });
     const fields = extractTallyFields(tallyData);
 
     if ("error" in fields) {
