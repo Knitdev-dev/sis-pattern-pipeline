@@ -19,6 +19,6 @@ jobs:
         run: npm install
 
       - name: Deploy to Trigger.dev
-        run: npx trigger.dev@4.4.4 deploy --env prod
+        run: npx trigger.dev@4.4.4 deploy --env prod 2>&1 || (cat /tmp/trigger-*/build-*.log 2>/dev/null; exit 1)
         env:
           TRIGGER_ACCESS_TOKEN: ${{ secrets.TRIGGER_ACCESS_TOKEN }}
