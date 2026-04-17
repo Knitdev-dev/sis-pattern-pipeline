@@ -1,1 +1,1 @@
-# sis-pattern-pipeline
+# SIS Pattern Pipeline
