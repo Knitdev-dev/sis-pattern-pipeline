@@ -1,4 +1,4 @@
-import { task, logger } from "@trigger.dev/sdk";
+import { task, logger, wait } from "@trigger.dev/sdk";
 import { Resend } from "resend";
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -36,6 +36,7 @@ export const sisPipelineTask = task({
     const resend = new Resend(process.env.RESEND_API_KEY);
     const adminEmail = process.env.ADMIN_EMAIL!;
     const fromEmail = process.env.FROM_EMAIL!;
+    const appUrl = process.env.APP_URL!; // e.g. https://your-approval-worker.workers.dev
 
     logger.log("SIS pipeline started", {
       bust: payload.Bust_cm,
@@ -129,28 +130,103 @@ export const sisPipelineTask = task({
     if (!checkSheetHtml) {
       logger.warn("Check sheet not generated", { error: output23Result.error });
       await sendAlert(resend, fromEmail, adminEmail, "Check sheet warning", output23Result.error || "No output2", payload);
-      // Don't throw — pattern still deliverable
     }
 
-    // ── Step 5: Send pattern to customer ──────────────────────────
-    if (payload.email) {
-      logger.log("Sending pattern to customer", { to: payload.email });
-      await resend.emails.send({
-        from: fromEmail,
-        to: [payload.email],
-        subject: "Your Set-In Sleeve Sweater Pattern",
-        html: patternHtml,
-      });
-    }
+    // ── Step 5: Convert pattern HTML → PDF ────────────────────────
+    logger.log("Converting pattern to PDF...");
+    const pdfBuffer = await htmlToPdf(patternHtml);
+    logger.log("PDF generated", { bytes: pdfBuffer.byteLength });
 
-    // ── Step 6: Send admin copy with log ──────────────────────────
-    logger.log("Sending admin copy...");
+    // ── Step 6: Admin approval gate ───────────────────────────────
+    // Send admin a preview email with Approve / Reject links,
+    // then pause the run until one of those links is clicked.
+    logger.log("Sending admin preview for approval...");
+
+    const approveUrl = `${appUrl}/approve?runId=${ctx.run.id}&action=approve`;
+    const rejectUrl  = `${appUrl}/approve?runId=${ctx.run.id}&action=reject`;
+
+    const pdfBase64 = bufferToBase64(pdfBuffer);
+
     await resend.emails.send({
       from: fromEmail,
       to: [adminEmail],
-      subject: `SIS Pattern ✅ — ${payload.email || "no email"} — Bust ${payload.Bust_cm}cm`,
+      subject: `⏳ REVIEW NEEDED — SIS Pattern — ${payload.email || "no email"} — Bust ${payload.Bust_cm}cm`,
       html: `
-        <h2>Pattern generated successfully</h2>
+        <h2>Pattern ready for review</h2>
+        <p>A new pattern has been generated. Please review the attached PDF before it is sent to the customer.</p>
+        <p><strong>Customer:</strong> ${payload.email || "no email"}</p>
+        <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row · ${payload.Ease_preference} · ${payload.Length_preference}</p>
+        <p><strong>Nodes active:</strong> ${JSON.stringify(calcJson.decision_path?.nodes_active)}</p>
+        <p><strong>Validation warnings:</strong> ${JSON.stringify(validation.warnings || [])}</p>
+        <hr>
+        <p>
+          <a href="${approveUrl}" style="background:#22c55e;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold;margin-right:12px">
+            ✅ Approve — Send to customer
+          </a>
+          <a href="${rejectUrl}" style="background:#ef4444;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold">
+            ❌ Reject — Do not send
+          </a>
+        </p>
+        <hr>
+        <h3>Calculation Log</h3>
+        <pre style="font-size:11px;background:#f5f5f5;padding:12px">${calcLog || "not generated"}</pre>
+      `,
+      attachments: [
+        {
+          filename: `pattern-${payload.Bust_cm}cm.pdf`,
+          content: pdfBase64,
+        },
+      ],
+    });
+
+    // ── Step 7: Wait for admin approval (up to 48 hours) ──────────
+    logger.log("Waiting for admin approval...");
+    const approvalEvent = await wait.forEvent("admin-approval", {
+      timeout: "48h",
+    });
+
+    if (!approvalEvent || approvalEvent.action !== "approve") {
+      logger.log("Pattern rejected or timed out — not sending to customer");
+      await resend.emails.send({
+        from: fromEmail,
+        to: [adminEmail],
+        subject: `❌ Pattern NOT sent — ${payload.email || "no email"} — Bust ${payload.Bust_cm}cm`,
+        html: `<p>The pattern was <strong>rejected</strong> (or approval timed out) and was <strong>not</strong> sent to the customer.</p>`,
+      });
+      return { status: "rejected", runId: ctx.run.id };
+    }
+
+    logger.log("Pattern approved — sending to customer...");
+
+    // ── Step 8: Send pattern PDF to customer ──────────────────────
+    if (payload.email) {
+      await resend.emails.send({
+        from: fromEmail,
+        to: [payload.email],
+        subject: "Your Set-In Sleeve Sweater Pattern is ready! 🧶",
+        html: `
+          <p>Hello,</p>
+          <p>Thank you for your order. Your personalised set-in sleeve sweater pattern is attached as a PDF.</p>
+          <p>If you have any questions, simply reply to this email.</p>
+          <p>Happy knitting!</p>
+        `,
+        attachments: [
+          {
+            filename: `your-sweater-pattern.pdf`,
+            content: pdfBase64,
+          },
+        ],
+      });
+      logger.log("Pattern PDF sent to customer", { to: payload.email });
+    }
+
+    // ── Step 9: Send admin confirmation copy ──────────────────────
+    await resend.emails.send({
+      from: fromEmail,
+      to: [adminEmail],
+      subject: `✅ Pattern SENT — ${payload.email || "no email"} — Bust ${payload.Bust_cm}cm`,
+      html: `
+        <h2>Pattern sent successfully</h2>
         <p><strong>Run ID:</strong> ${ctx.run.id}</p>
         <p><strong>Customer:</strong> ${payload.email || "no email"}</p>
         <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row · ${payload.Ease_preference} · ${payload.Length_preference}</p>
@@ -160,6 +236,12 @@ export const sisPipelineTask = task({
         <h3>Calculation Log</h3>
         <pre style="font-size:11px;background:#f5f5f5;padding:12px">${calcLog || "not generated"}</pre>
       `,
+      attachments: [
+        {
+          filename: `pattern-${payload.Bust_cm}cm.pdf`,
+          content: pdfBase64,
+        },
+      ],
     });
 
     logger.log("Pipeline complete ✅");
@@ -189,7 +271,6 @@ export const tallyWebhookTask = task({
       construction: fields.construction_method,
     });
 
-    // Trigger the main SIS pipeline
     const handle = await sisPipelineTask.trigger(fields);
     logger.log("SIS pipeline triggered", { runId: handle.id });
 
@@ -197,29 +278,66 @@ export const tallyWebhookTask = task({
   },
 });
 
+// ── HTML → PDF via Cloudflare Browser Rendering ───────────────────────
+// Calls your Cloudflare Worker that wraps the Browser Rendering API.
+// Set PDF_WORKER_URL in env vars, e.g. https://sis-pdf.yulia-rovchak.workers.dev
+
+async function htmlToPdf(html: string): Promise<ArrayBuffer> {
+  const pdfWorkerUrl = process.env.PDF_WORKER_URL;
+  const pdfApiKey   = process.env.PDF_WORKER_API_KEY || "";
+
+  if (!pdfWorkerUrl) {
+    throw new Error("PDF_WORKER_URL env var is not set");
+  }
+
+  const response = await fetch(pdfWorkerUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain",
+      "X-API-Key": pdfApiKey,
+    },
+    body: html,
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`PDF worker failed: HTTP ${response.status}: ${err.slice(0, 300)}`);
+  }
+
+  return response.arrayBuffer();
+}
+
+// ── ArrayBuffer → base64 string ───────────────────────────────────────
+
+function bufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
 // ── Field extraction ─────────────────────────────────────────────────
 
 function extractTallyFields(payload: TallyWebhookPayload): SisPayload & { error?: string } {
   try {
     const result: any = {};
 
-    // Email field
     const emailField = payload.data?.fields?.find(
       (f) => f.type === "INPUT_EMAIL" || f.label?.toLowerCase().includes("email")
     );
     if (emailField) result.email = emailField.value;
 
-    // Field label → calculator input name mapping
-    // Labels must match exactly what Tally sends in the webhook payload
     const fieldMap: Record<string, string> = {
-  "Bust/chest measurement (cm)": "Bust_cm",
-  "Stitches per 10 cm": "Gauge_st",
-  "Rows per 10 cm": "Gauge_row",
-  "Ease/fit preference": "Ease_preference",
-  "Length preference": "Length_preference",
-  "Front_neck_depth_for_V_cm": "Front_neck_depth_for_V_cm",
-  "Sleeve_length_cm": "Sleeve_length_cm",
-  "Construction_method": "construction_method",
+      "Bust/chest measurement (cm)": "Bust_cm",
+      "Stitches per 10 cm": "Gauge_st",
+      "Rows per 10 cm": "Gauge_row",
+      "Ease/fit preference": "Ease_preference",
+      "Length preference": "Length_preference",
+      "Front_neck_depth_for_V_cm": "Front_neck_depth_for_V_cm",
+      "Sleeve_length_cm": "Sleeve_length_cm",
+      "Construction_method": "construction_method",
     };
 
     const numericFields = new Set([
@@ -228,20 +346,18 @@ function extractTallyFields(payload: TallyWebhookPayload): SisPayload & { error?
     ]);
 
     for (const field of payload.data?.fields || []) {
-  const key = fieldMap[field.label];
-  if (!key) continue;
-  let val = field.value;
-  // Resolve dropdown UUIDs to text
-  if (Array.isArray(val) && field.options) {
-    const matched = field.options.find((o: any) => o.id === val[0]);
-    val = matched ? matched.text : val[0];
-  }
-  if (typeof val === "string") val = val.trim().toLowerCase();
-  if (numericFields.has(key)) val = parseFloat(val);
-  result[key] = val;
-}
+      const key = fieldMap[field.label];
+      if (!key) continue;
+      let val = field.value;
+      if (Array.isArray(val) && field.options) {
+        const matched = field.options.find((o: any) => o.id === val[0]);
+        val = matched ? matched.text : val[0];
+      }
+      if (typeof val === "string") val = val.trim().toLowerCase();
+      if (numericFields.has(key)) val = parseFloat(val);
+      result[key] = val;
+    }
 
-    // Validate required fields
     const required = [
       "Bust_cm", "Gauge_st", "Gauge_row", "Ease_preference",
       "Length_preference", "Front_neck_depth_for_V_cm", "Sleeve_length_cm",
