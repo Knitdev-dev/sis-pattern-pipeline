@@ -72,7 +72,6 @@ export const sisPipelineTask = task({
         flags: calcJson.decision_path?.flags,
       });
 
-      // Validate
       logger.log(`Validator attempt ${attempt}...`);
       const validatorResult = await callWorker(
         process.env.VALIDATOR_URL!,
@@ -158,8 +157,12 @@ export const sisPipelineTask = task({
     // ── Step 6: Admin approval gate ───────────────────────────────
     logger.log("Sending admin preview for approval...");
 
-    const approveUrl = `${appUrl}/approve?runId=${ctx.run.id}&action=approve`;
-    const rejectUrl  = `${appUrl}/approve?runId=${ctx.run.id}&action=reject`;
+    const token = await wait.createToken({
+      timeout: "48h",
+    });
+
+    const approveUrl = `${appUrl}/approve?tokenId=${token.id}&action=approve`;
+    const rejectUrl  = `${appUrl}/approve?tokenId=${token.id}&action=reject`;
 
     const pdfBase64 = bufferToBase64(pdfBuffer);
 
@@ -197,11 +200,9 @@ export const sisPipelineTask = task({
 
     // ── Step 7: Wait for admin approval (up to 48 hours) ──────────
     logger.log("Waiting for admin approval...");
-    const approvalEvent = await wait.forEvent("admin-approval", {
-      timeout: "48h",
-    });
+    const approvalResult = await wait.forToken<{ action: string }>(token.id);
 
-    if (!approvalEvent || approvalEvent.action !== "approve") {
+    if (!approvalResult.ok || approvalResult.output?.action !== "approve") {
       logger.log("Pattern rejected or timed out — not sending to customer");
       await resend.emails.send({
         from: fromEmail,
