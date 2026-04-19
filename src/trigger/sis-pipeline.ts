@@ -202,7 +202,10 @@ export const sisPipelineTask = task({
     logger.log("Waiting for admin approval...");
     const approvalResult = await wait.forToken<{ action: string }>(token.id);
 
-    if (!approvalResult.ok || approvalResult.output?.action !== "approve") {
+    logger.log("Approval result", { result: JSON.stringify(approvalResult) });
+
+const action = approvalResult.ok ? (approvalResult.output as any)?.action : null;
+if (action !== "approve") {
       logger.log("Pattern rejected or timed out — not sending to customer");
       await resend.emails.send({
         from: fromEmail,
