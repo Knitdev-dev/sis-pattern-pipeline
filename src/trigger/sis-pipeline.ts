@@ -204,7 +204,8 @@ export const sisPipelineTask = task({
 
     logger.log("Approval result", { result: JSON.stringify(approvalResult) });
 
-const action = approvalResult.ok ? (approvalResult.output as any)?.action : null;
+const output = approvalResult.ok ? (approvalResult.output as any) : null;
+const action = output?.data?.action || output?.action;
 if (action !== "approve") {
       logger.log("Pattern rejected or timed out — not sending to customer");
       await resend.emails.send({
