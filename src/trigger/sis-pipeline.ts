@@ -36,7 +36,7 @@ export const sisPipelineTask = task({
     const resend = new Resend(process.env.RESEND_API_KEY);
     const adminEmail = process.env.ADMIN_EMAIL!;
     const fromEmail = process.env.FROM_EMAIL!;
-    const appUrl = process.env.APP_URL!; // e.g. https://your-approval-worker.workers.dev
+    const appUrl = process.env.APP_URL!;
 
     logger.log("SIS pipeline started", {
       bust: payload.Bust_cm,
@@ -44,59 +44,77 @@ export const sisPipelineTask = task({
       runId: ctx.run.id,
     });
 
-    // ── Step 1: Calculator ─────────────────────────────────────────
-    logger.log("Calling calculator...");
-    const calcResult = await callWorker(
-      process.env.CALCULATOR_URL!,
-      process.env.CALCULATOR_API_KEY!,
-      payload
-    );
+    // ── Steps 1 & 2: Calculator + Validator (with retry) ──────────
+    let calcJson: any;
+    let validation: any;
 
-    if (calcResult.error || calcResult.data?.error) {
-      const msg = calcResult.error || calcResult.data?.error;
-      logger.error("Calculator failed", { msg });
-      await sendAlert(resend, fromEmail, adminEmail, "Calculator error", msg, payload);
-      throw new Error(`Calculator failed: ${msg}`);
-    }
-
-    const calcJson = calcResult.data;
-    logger.log("Calculator complete", {
-      nodes_active: calcJson.decision_path?.nodes_active,
-      flags: calcJson.decision_path?.flags,
-    });
-
-    // ── Step 2: Validator ──────────────────────────────────────────
-    logger.log("Calling validator...");
-    const validatorResult = await callWorker(
-      process.env.VALIDATOR_URL!,
-      process.env.VALIDATOR_API_KEY!,
-      calcJson
-    );
-
-    if (validatorResult.error) {
-      await sendAlert(resend, fromEmail, adminEmail, "Validator error", validatorResult.error, payload);
-      throw new Error(`Validator failed: ${validatorResult.error}`);
-    }
-
-    const validation = validatorResult.data;
-    logger.log("Validator complete", { pass: validation.pass, failed: validation.failed });
-
-    if (!validation.pass) {
-      await sendAlert(
-        resend, fromEmail, adminEmail,
-        "Validation failed",
-        `Failed checks:\n${JSON.stringify(validation.failed, null, 2)}`,
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      logger.log(`Calculator attempt ${attempt}...`);
+      const calcResult = await callWorker(
+        process.env.CALCULATOR_URL!,
+        process.env.CALCULATOR_API_KEY!,
         payload
       );
-      if (payload.email) {
-        await resend.emails.send({
-          from: fromEmail,
-          to: [payload.email],
-          subject: "Your knitting pattern — we're checking something",
-          html: `<p>Thank you for your order. We noticed a small issue with the calculations and our team will review and send your pattern shortly.</p>`,
-        });
+
+      if (calcResult.error || calcResult.data?.error) {
+        const msg = calcResult.error || calcResult.data?.error;
+        logger.error(`Calculator attempt ${attempt} failed`, { msg });
+        if (attempt === 3) {
+          await sendAlert(resend, fromEmail, adminEmail, "Calculator error", msg, payload);
+          throw new Error(`Calculator failed after 3 attempts: ${msg}`);
+        }
+        continue;
       }
-      return { status: "validation_failed", failed: validation.failed };
+
+      calcJson = calcResult.data;
+      logger.log(`Calculator attempt ${attempt} complete`, {
+        nodes_active: calcJson.decision_path?.nodes_active,
+        flags: calcJson.decision_path?.flags,
+      });
+
+      // Validate
+      logger.log(`Validator attempt ${attempt}...`);
+      const validatorResult = await callWorker(
+        process.env.VALIDATOR_URL!,
+        process.env.VALIDATOR_API_KEY!,
+        calcJson
+      );
+
+      if (validatorResult.error) {
+        await sendAlert(resend, fromEmail, adminEmail, "Validator error", validatorResult.error, payload);
+        throw new Error(`Validator failed: ${validatorResult.error}`);
+      }
+
+      validation = validatorResult.data;
+      logger.log(`Validator attempt ${attempt} complete`, {
+        pass: validation.pass,
+        failed: validation.failed,
+      });
+
+      if (validation.pass) {
+        logger.log(`Validation passed on attempt ${attempt}`);
+        break;
+      }
+
+      logger.warn(`Validation failed on attempt ${attempt}`, { failed: validation.failed });
+
+      if (attempt === 3) {
+        await sendAlert(
+          resend, fromEmail, adminEmail,
+          "Validation failed after 3 attempts",
+          `Failed checks:\n${JSON.stringify(validation.failed, null, 2)}`,
+          payload
+        );
+        if (payload.email) {
+          await resend.emails.send({
+            from: fromEmail,
+            to: [payload.email],
+            subject: "Your knitting pattern — we're checking something",
+            html: `<p>Thank you for your order. We noticed a small issue with the calculations and our team will review and send your pattern shortly.</p>`,
+          });
+        }
+        return { status: "validation_failed", failed: validation.failed };
+      }
     }
 
     // ── Step 3: Formatter — Pattern HTML ──────────────────────────
@@ -138,8 +156,6 @@ export const sisPipelineTask = task({
     logger.log("PDF generated", { bytes: pdfBuffer.byteLength });
 
     // ── Step 6: Admin approval gate ───────────────────────────────
-    // Send admin a preview email with Approve / Reject links,
-    // then pause the run until one of those links is clicked.
     logger.log("Sending admin preview for approval...");
 
     const approveUrl = `${appUrl}/approve?runId=${ctx.run.id}&action=approve`;
@@ -278,9 +294,7 @@ export const tallyWebhookTask = task({
   },
 });
 
-// ── HTML → PDF via Cloudflare Browser Rendering ───────────────────────
-// Calls your Cloudflare Worker that wraps the Browser Rendering API.
-// Set PDF_WORKER_URL in env vars, e.g. https://sis-pdf.yulia-rovchak.workers.dev
+// ── HTML → PDF ────────────────────────────────────────────────────────
 
 async function htmlToPdf(html: string): Promise<ArrayBuffer> {
   const pdfWorkerUrl = process.env.PDF_WORKER_URL;
@@ -307,7 +321,7 @@ async function htmlToPdf(html: string): Promise<ArrayBuffer> {
   return response.arrayBuffer();
 }
 
-// ── ArrayBuffer → base64 string ───────────────────────────────────────
+// ── ArrayBuffer → base64 ──────────────────────────────────────────────
 
 function bufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
@@ -318,7 +332,7 @@ function bufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
-// ── Field extraction ─────────────────────────────────────────────────
+// ── Field extraction ──────────────────────────────────────────────────
 
 function extractTallyFields(payload: TallyWebhookPayload): SisPayload & { error?: string } {
   try {
