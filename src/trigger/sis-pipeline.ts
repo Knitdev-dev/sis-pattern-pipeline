@@ -92,6 +92,12 @@ export const sisPipelineTask = task({
 
       if (validation.pass) {
         logger.log(`Validation passed on attempt ${attempt}`);
+        // Use the auto-corrected JSON returned by the validator (not the
+        // original calcJson) so that Sleeve_increase_interval and
+        // Back_length_work_even_rows are already corrected before formatting.
+        if (validation.data) {
+          calcJson = validation.data;
+        }
         break;
       }
 
