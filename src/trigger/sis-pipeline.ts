@@ -3,6 +3,15 @@ import { Resend } from "resend";
 
 // ── Types ────────────────────────────────────────────────────────────
 
+interface MondayPayload {
+  email?: string;
+  bust_cm: number;
+  ease_preference: string;
+  length_preference: string;
+  gauge_sts: number;
+  gauge_rows: number;
+  construction_method?: string;
+}
 interface SisPayload {
   email?: string;
   Bust_cm: number;
