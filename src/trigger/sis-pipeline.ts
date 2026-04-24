@@ -12,6 +12,7 @@ interface TdcrPayload {
   gauge_rows: number;
   construction_method?: string;
 }
+
 interface SisPayload {
   email?: string;
   Bust_cm: number;
@@ -34,7 +35,7 @@ interface TallyWebhookPayload {
   };
 }
 
-// ── Main pipeline task ───────────────────────────────────────────────
+// ── SIS pipeline task ────────────────────────────────────────────────
 
 export const sisPipelineTask = task({
   id: "sis-pipeline",
@@ -101,9 +102,6 @@ export const sisPipelineTask = task({
 
       if (validation.pass) {
         logger.log(`Validation passed on attempt ${attempt}`);
-        // Use the auto-corrected JSON returned by the validator (not the
-        // original calcJson) so that Sleeve_increase_interval and
-        // Back_length_work_even_rows are already corrected before formatting.
         if (validation.data) {
           calcJson = validation.data;
         }
@@ -219,9 +217,9 @@ export const sisPipelineTask = task({
 
     logger.log("Approval result", { result: JSON.stringify(approvalResult) });
 
-const output = approvalResult.ok ? (approvalResult.output as any) : null;
-const action = output?.data?.action || output?.action;
-if (action !== "approve") {
+    const output = approvalResult.ok ? (approvalResult.output as any) : null;
+    const action = output?.data?.action || output?.action;
+    if (action !== "approve") {
       logger.log("Pattern rejected or timed out — not sending to customer");
       await resend.emails.send({
         from: fromEmail,
@@ -285,10 +283,13 @@ if (action !== "approve") {
   },
 });
 
+// ── TDCR pipeline task ───────────────────────────────────────────────
+
 export const tdcrPipelineTask = task({
   id: "tdcr-pipeline",
   maxDuration: 1800,
   retry: { maxAttempts: 2 },
+
   run: async (payload: TdcrPayload, { ctx }) => {
     // Step 1: call TDCR_CALCULATOR_URL
     // Step 2: call TDCR_VALIDATOR_URL
@@ -296,6 +297,7 @@ export const tdcrPipelineTask = task({
     // Step 4: PDF → admin approval gate (wait.forToken) → send to customer
   },
 });
+
 // ── Tally webhook handler task ───────────────────────────────────────
 
 export const tallyWebhookTask = task({
@@ -313,25 +315,22 @@ export const tallyWebhookTask = task({
     }
 
     logger.log("Tally fields extracted", {
-      bust: fields.Bust_cm,
-      ease: fields.Ease_preference,
+      bust: fields.Bust_cm || fields.bust_cm,
+      ease: fields.Ease_preference || fields.ease_preference,
       construction: fields.construction_method,
     });
 
-const isTdcr = fields.construction_method === 'knitted in one piece, from the top down (seamless)';
+    const isTdcr = fields.construction_method === 'knitted in one piece, from the top down (seamless)';
 
-if (isTdcr) {
-  const handle = await tdcrPipelineTask.trigger(fields);
-  logger.log("TDCR pipeline triggered", { runId: handle.id });
-  return { status: "triggered", pipeline: "tdcr", runId: handle.id };
-} else {
-  const handle = await sisPipelineTask.trigger(fields);
-  logger.log("SIS pipeline triggered", { runId: handle.id });
-  return { status: "triggered", pipeline: "sis", runId: handle.id };
-}
-    logger.log("SIS pipeline triggered", { runId: handle.id });
-
-    return { status: "triggered", runId: handle.id };
+    if (isTdcr) {
+      const handle = await tdcrPipelineTask.trigger(fields);
+      logger.log("TDCR pipeline triggered", { runId: handle.id });
+      return { status: "triggered", pipeline: "tdcr", runId: handle.id };
+    } else {
+      const handle = await sisPipelineTask.trigger(fields);
+      logger.log("SIS pipeline triggered", { runId: handle.id });
+      return { status: "triggered", pipeline: "sis", runId: handle.id };
+    }
   },
 });
 
@@ -375,7 +374,7 @@ function bufferToBase64(buffer: ArrayBuffer): string {
 
 // ── Field extraction ──────────────────────────────────────────────────
 
-function extractTallyFields(payload: TallyWebhookPayload): SisPayload & { error?: string } {
+function extractTallyFields(payload: TallyWebhookPayload): any {
   try {
     const result: any = {};
 
@@ -415,20 +414,20 @@ function extractTallyFields(payload: TallyWebhookPayload): SisPayload & { error?
 
     const isTdcr = result.construction_method === 'knitted in one piece, from the top down (seamless)';
 
-const required = isTdcr
-  ? ["Bust_cm", "Gauge_st", "Gauge_row", "Ease_preference", "Length_preference"]
-  : ["Bust_cm", "Gauge_st", "Gauge_row", "Ease_preference", "Length_preference",
-     "Front_neck_depth_for_V_cm", "Sleeve_length_cm"];
+    const required = isTdcr
+      ? ["Bust_cm", "Gauge_st", "Gauge_row", "Ease_preference", "Length_preference"]
+      : ["Bust_cm", "Gauge_st", "Gauge_row", "Ease_preference", "Length_preference",
+         "Front_neck_depth_for_V_cm", "Sleeve_length_cm"];
 
     for (const r of required) {
       if (result[r] === undefined || result[r] === null || result[r] === "" || Number.isNaN(result[r])) {
-        return { error: `Missing required field: ${r}` } as any;
+        return { error: `Missing required field: ${r}` };
       }
     }
 
     return result;
   } catch (e: any) {
-    return { error: `Field extraction failed: ${e.message}` } as any;
+    return { error: `Field extraction failed: ${e.message}` };
   }
 }
 
@@ -474,9 +473,9 @@ async function sendAlert(
   await resend.emails.send({
     from,
     to: [to],
-    subject: `SIS Pipeline Alert: ${title}`,
+    subject: `Pipeline Alert: ${title}`,
     html: `
-      <h2>SIS Pipeline Alert: ${title}</h2>
+      <h2>Pipeline Alert: ${title}</h2>
       <p><strong>Detail:</strong> ${detail}</p>
       <h3>Inputs</h3>
       <pre style="background:#f5f5f5;padding:12px">${JSON.stringify(inputs, null, 2)}</pre>
