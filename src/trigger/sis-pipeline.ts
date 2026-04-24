@@ -3,7 +3,7 @@ import { Resend } from "resend";
 
 // ── Types ────────────────────────────────────────────────────────────
 
-interface MondayPayload {
+interface TdcrPayload {
   email?: string;
   bust_cm: number;
   ease_preference: string;
