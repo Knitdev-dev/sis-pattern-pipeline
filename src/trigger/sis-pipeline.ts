@@ -285,6 +285,17 @@ if (action !== "approve") {
   },
 });
 
+export const tdcrPipelineTask = task({
+  id: "tdcr-pipeline",
+  maxDuration: 1800,
+  retry: { maxAttempts: 2 },
+  run: async (payload: TdcrPayload, { ctx }) => {
+    // Step 1: call TDCR_CALCULATOR_URL
+    // Step 2: call TDCR_VALIDATOR_URL
+    // Step 3: if pass → call formatter with TDCR template + prompt
+    // Step 4: PDF → admin approval gate (wait.forToken) → send to customer
+  },
+});
 // ── Tally webhook handler task ───────────────────────────────────────
 
 export const tallyWebhookTask = task({
@@ -307,7 +318,17 @@ export const tallyWebhookTask = task({
       construction: fields.construction_method,
     });
 
-    const handle = await sisPipelineTask.trigger(fields);
+const isTdcr = fields.construction_method === 'knitted in one piece, from the top down (seamless)';
+
+if (isTdcr) {
+  const handle = await tdcrPipelineTask.trigger(fields);
+  logger.log("TDCR pipeline triggered", { runId: handle.id });
+  return { status: "triggered", pipeline: "tdcr", runId: handle.id };
+} else {
+  const handle = await sisPipelineTask.trigger(fields);
+  logger.log("SIS pipeline triggered", { runId: handle.id });
+  return { status: "triggered", pipeline: "sis", runId: handle.id };
+}
     logger.log("SIS pipeline triggered", { runId: handle.id });
 
     return { status: "triggered", runId: handle.id };
@@ -392,10 +413,12 @@ function extractTallyFields(payload: TallyWebhookPayload): SisPayload & { error?
       result[key] = val;
     }
 
-    const required = [
-      "Bust_cm", "Gauge_st", "Gauge_row", "Ease_preference",
-      "Length_preference", "Front_neck_depth_for_V_cm", "Sleeve_length_cm",
-    ];
+    const isTdcr = result.construction_method === 'knitted in one piece, from the top down (seamless)';
+
+const required = isTdcr
+  ? ["Bust_cm", "Gauge_st", "Gauge_row", "Ease_preference", "Length_preference"]
+  : ["Bust_cm", "Gauge_st", "Gauge_row", "Ease_preference", "Length_preference",
+     "Front_neck_depth_for_V_cm", "Sleeve_length_cm"];
 
     for (const r of required) {
       if (result[r] === undefined || result[r] === null || result[r] === "" || Number.isNaN(result[r])) {
