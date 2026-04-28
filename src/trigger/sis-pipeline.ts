@@ -3,20 +3,17 @@ import { Resend } from "resend";
 
 // ── Types ────────────────────────────────────────────────────────────
 
+// TDCR payload uses the same Tally-extractor field format as SIS
+// (Bust_cm, Gauge_st, Gauge_row, etc.). Translation to the lowercase
+// names the TDCR calculator expects happens inside the task.
 interface TdcrPayload {
   email?: string;
-  bust_cm: number;
-  ease_preference: string;
-  length_preference: string;
-  gauge_sts: number;
-  gauge_rows: number;
+  Bust_cm: number;
+  Gauge_st: number;
+  Gauge_row: number;
+  Ease_preference: string;
+  Length_preference: string;
   construction_method?: string;
-  // Also accept SIS-style field names from extractTallyFields
-  Bust_cm?: number;
-  Ease_preference?: string;
-  Length_preference?: string;
-  Gauge_st?: number;
-  Gauge_row?: number;
 }
 
 interface SisPayload {
@@ -176,10 +173,14 @@ export const sisPipelineTask = task({
     // ── Step 6: Admin approval gate ───────────────────────────────
     logger.log("Sending admin preview for approval...");
 
-    const token = await wait.createToken({ timeout: "48h" });
+    const token = await wait.createToken({
+      timeout: "48h",
+    });
+
     const approveUrl = `${appUrl}/approve?tokenId=${token.id}&action=approve`;
     const rejectUrl  = `${appUrl}/approve?tokenId=${token.id}&action=reject`;
-    const pdfBase64  = bufferToBase64(pdfBuffer);
+
+    const pdfBase64 = bufferToBase64(pdfBuffer);
 
     await resend.emails.send({
       from: fromEmail,
@@ -187,6 +188,7 @@ export const sisPipelineTask = task({
       subject: `⏳ REVIEW NEEDED — SIS Pattern — ${payload.email || "no email"} — Bust ${payload.Bust_cm}cm`,
       html: `
         <h2>Pattern ready for review</h2>
+        <p>A new pattern has been generated. Please review the attached PDF before it is sent to the customer.</p>
         <p><strong>Customer:</strong> ${payload.email || "no email"}</p>
         <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row · ${payload.Ease_preference} · ${payload.Length_preference}</p>
         <p><strong>Nodes active:</strong> ${JSON.stringify(calcJson.decision_path?.nodes_active)}</p>
@@ -204,17 +206,22 @@ export const sisPipelineTask = task({
         <h3>Calculation Log</h3>
         <pre style="font-size:11px;background:#f5f5f5;padding:12px">${calcLog || "not generated"}</pre>
       `,
-      attachments: [{ filename: `pattern-${payload.Bust_cm}cm.pdf`, content: pdfBase64 }],
+      attachments: [
+        {
+          filename: `pattern-${payload.Bust_cm}cm.pdf`,
+          content: pdfBase64,
+        },
+      ],
     });
 
-    // ── Step 7: Wait for admin approval ───────────────────────────
+    // ── Step 7: Wait for admin approval (up to 48 hours) ──────────
     logger.log("Waiting for admin approval...");
     const approvalResult = await wait.forToken<{ action: string }>(token.id);
+
     logger.log("Approval result", { result: JSON.stringify(approvalResult) });
 
     const output = approvalResult.ok ? (approvalResult.output as any) : null;
     const action = output?.data?.action || output?.action;
-
     if (action !== "approve") {
       logger.log("Pattern rejected or timed out — not sending to customer");
       await resend.emails.send({
@@ -233,14 +240,19 @@ export const sisPipelineTask = task({
       await resend.emails.send({
         from: fromEmail,
         to: [payload.email],
-        subject: "Your Set-In Sleeve Sweater Pattern is ready! 🧶",
+        subject: "Your personalised knitting pattern is ready 🧶",
         html: `
           <p>Hello,</p>
           <p>Thank you for your order. Your personalised set-in sleeve sweater pattern is attached as a PDF.</p>
           <p>If you have any questions, simply reply to this email.</p>
           <p>Happy knitting!</p>
         `,
-        attachments: [{ filename: `your-sweater-pattern.pdf`, content: pdfBase64 }],
+        attachments: [
+          {
+            filename: `your-sweater-pattern.pdf`,
+            content: pdfBase64,
+          },
+        ],
       });
       logger.log("Pattern PDF sent to customer", { to: payload.email });
     }
@@ -261,10 +273,15 @@ export const sisPipelineTask = task({
         <h3>Calculation Log</h3>
         <pre style="font-size:11px;background:#f5f5f5;padding:12px">${calcLog || "not generated"}</pre>
       `,
-      attachments: [{ filename: `pattern-${payload.Bust_cm}cm.pdf`, content: pdfBase64 }],
+      attachments: [
+        {
+          filename: `pattern-${payload.Bust_cm}cm.pdf`,
+          content: pdfBase64,
+        },
+      ],
     });
 
-    logger.log("SIS pipeline complete ✅");
+    logger.log("Pipeline complete ✅");
     return { status: "success", runId: ctx.run.id };
   },
 });
@@ -279,63 +296,85 @@ export const tdcrPipelineTask = task({
   run: async (payload: TdcrPayload, { ctx }) => {
     const resend = new Resend(process.env.RESEND_API_KEY);
     const adminEmail = process.env.ADMIN_EMAIL!;
-    const fromEmail  = process.env.FROM_EMAIL!;
-    const appUrl     = process.env.APP_URL!;
-
-    // Normalise field names — extractTallyFields uses SIS-style capitalisation
-    const bust_cm           = payload.bust_cm           ?? payload.Bust_cm!;
-    const ease_preference   = payload.ease_preference   ?? payload.Ease_preference!;
-    const length_preference = payload.length_preference ?? payload.Length_preference!;
-    const gauge_sts         = payload.gauge_sts         ?? payload.Gauge_st!;
-    const gauge_rows        = payload.gauge_rows        ?? payload.Gauge_row!;
+    const fromEmail = process.env.FROM_EMAIL!;
+    const appUrl = process.env.APP_URL!;
 
     logger.log("TDCR pipeline started", {
-      bust: bust_cm,
+      bust: payload.Bust_cm,
       email: payload.email,
       runId: ctx.run.id,
     });
 
-    // ── Step 1: Calculator ─────────────────────────────────────────
-    logger.log("Calling TDCR calculator...");
-    const calcInput = { bust_cm, ease_preference, length_preference, gauge_sts, gauge_rows };
+    // Translate Tally-format payload to TDCR calculator format
+    // (calculator expects lowercase keys + plural gauge_sts / gauge_rows)
+    const calcInput = {
+      bust_cm: payload.Bust_cm,
+      gauge_sts: payload.Gauge_st,
+      gauge_rows: payload.Gauge_row,
+      ease_preference: payload.Ease_preference,
+      length_preference: payload.Length_preference,
+    };
 
-    const calcResult = await callWorker(
-      process.env.TDCR_CALCULATOR_URL!,
-      process.env.TDCR_CALCULATOR_KEY!,
-      calcInput
-    );
+    // ── Steps 1 & 2: Calculator + Validator (with retry) ──────────
+    let calcJson: any;
+    let validation: any;
 
-    if (calcResult.error || calcResult.data?.error) {
-      const msg = calcResult.error || calcResult.data?.error;
-      await sendAlert(resend, fromEmail, adminEmail, "TDCR Calculator error", msg, calcInput);
-      throw new Error(`TDCR Calculator failed: ${msg}`);
-    }
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      logger.log(`TDCR Calculator attempt ${attempt}...`);
+      const calcResult = await callWorker(
+        process.env.TDCR_CALCULATOR_URL!,
+        process.env.TDCR_CALCULATOR_API_KEY!,
+        calcInput
+      );
 
-    const calcJson = calcResult.data;
-    logger.log("TDCR calculator complete", { N_sts: calcJson.N_sts });
+      if (calcResult.error || calcResult.data?.error) {
+        const msg = calcResult.error || calcResult.data?.error;
+        logger.error(`TDCR Calculator attempt ${attempt} failed`, { msg });
+        if (attempt === 3) {
+          await sendAlert(resend, fromEmail, adminEmail, "TDCR Calculator error", msg, payload);
+          throw new Error(`TDCR Calculator failed after 3 attempts: ${msg}`);
+        }
+        continue;
+      }
 
-    // ── Step 2: Validator ──────────────────────────────────────────
-    logger.log("Calling TDCR validator...");
-    const validatorResult = await callWorker(
-      process.env.TDCR_VALIDATOR_URL!,
-      process.env.TDCR_VALIDATOR_KEY!,
-      calcJson
-    );
+      calcJson = calcResult.data;
+      logger.log(`TDCR Calculator attempt ${attempt} complete`, {
+        checks: calcJson.checks,
+        calculation_error: calcJson.calculation_error || false,
+      });
 
-    if (validatorResult.error) {
-      await sendAlert(resend, fromEmail, adminEmail, "TDCR Validator error", validatorResult.error, calcInput);
-      throw new Error(`TDCR Validator failed: ${validatorResult.error}`);
-    }
+      logger.log(`TDCR Validator attempt ${attempt}...`);
+      const validatorResult = await callWorker(
+        process.env.TDCR_VALIDATOR_URL!,
+        process.env.TDCR_VALIDATOR_API_KEY!,
+        calcJson
+      );
 
-    const validation = validatorResult.data;
-    logger.log("TDCR validator complete", { pass: validation.pass, failed: validation.failed });
+      if (validatorResult.error) {
+        await sendAlert(resend, fromEmail, adminEmail, "TDCR Validator error", validatorResult.error, payload);
+        throw new Error(`TDCR Validator failed: ${validatorResult.error}`);
+      }
 
-    if (!validation.pass) {
+      validation = validatorResult.data;
+      logger.log(`TDCR Validator attempt ${attempt} complete`, {
+        pass: validation.pass,
+        failed: validation.failed,
+      });
+
+      if (validation.pass) {
+        logger.log(`TDCR Validation passed on attempt ${attempt}`);
+        break;
+      }
+
+      logger.warn(`TDCR Validation failed on attempt ${attempt}`, { failed: validation.failed });
+
+      // TDCR calculator is deterministic — retrying after a validation
+      // failure won't change the output. Fail fast on the first attempt.
       await sendAlert(
         resend, fromEmail, adminEmail,
         "TDCR Validation failed",
         `Failed checks:\n${JSON.stringify(validation.failed, null, 2)}`,
-        calcInput
+        payload
       );
       if (payload.email) {
         await resend.emails.send({
@@ -349,56 +388,65 @@ export const tdcrPipelineTask = task({
     }
 
     // ── Step 3: Formatter — Pattern HTML ──────────────────────────
-    // Add pattern_type so the formatter worker loads the TDCR KV keys
-    const calcJsonForFormatter = { ...calcJson, pattern_type: "tdcr" };
-
-    logger.log("Calling formatter /output1 (TDCR)...");
+    // calcJson already contains pattern_type: "tdcr" (set by the calculator)
+    // which routes the formatter to the TDCR KV keys.
+    logger.log("Calling TDCR formatter /output1...");
     const output1Result = await callWorker(
       process.env.FORMATTER_URL! + "/output1",
       process.env.FORMATTER_API_KEY!,
-      calcJsonForFormatter
+      calcJson
     );
 
     if (output1Result.error || !output1Result.data?.output1) {
       const msg = output1Result.error || "No output1 returned";
-      await sendAlert(resend, fromEmail, adminEmail, "TDCR Formatter output1 error", msg, calcInput);
+      await sendAlert(resend, fromEmail, adminEmail, "TDCR Formatter output1 error", msg, payload);
       throw new Error(`TDCR Formatter output1 failed: ${msg}`);
     }
 
     const patternHtml = output1Result.data.output1;
-    logger.log("TDCR pattern HTML generated", { chars: patternHtml.length });
+    logger.log("TDCR Pattern HTML generated", { chars: patternHtml.length });
 
-    // ── Step 4: Formatter — Calculation Log ───────────────────────
-    logger.log("Calling formatter /output23 (TDCR)...");
+    // ── Step 4: Formatter — Calculation Log only (no check sheet for TDCR) ──
+    logger.log("Calling TDCR formatter /output23 (log only)...");
     const output23Result = await callWorker(
       process.env.FORMATTER_URL! + "/output23",
       process.env.FORMATTER_API_KEY!,
-      calcJsonForFormatter
+      calcJson
     );
 
     const calcLog = output23Result.data?.output3 || null;
 
+    if (!calcLog) {
+      logger.warn("TDCR Calculation log not generated", { error: output23Result.error });
+    }
+
     // ── Step 5: Convert pattern HTML → PDF ────────────────────────
     logger.log("Converting TDCR pattern to PDF...");
     const pdfBuffer = await htmlToPdf(patternHtml);
-    logger.log("PDF generated", { bytes: pdfBuffer.byteLength });
+    logger.log("TDCR PDF generated", { bytes: pdfBuffer.byteLength });
 
     // ── Step 6: Admin approval gate ───────────────────────────────
-    logger.log("Sending admin preview for approval...");
+    logger.log("Sending TDCR admin preview for approval...");
 
-    const token = await wait.createToken({ timeout: "48h" });
+    const token = await wait.createToken({
+      timeout: "48h",
+    });
+
     const approveUrl = `${appUrl}/approve?tokenId=${token.id}&action=approve`;
     const rejectUrl  = `${appUrl}/approve?tokenId=${token.id}&action=reject`;
-    const pdfBase64  = bufferToBase64(pdfBuffer);
+
+    const pdfBase64 = bufferToBase64(pdfBuffer);
 
     await resend.emails.send({
       from: fromEmail,
       to: [adminEmail],
-      subject: `⏳ REVIEW NEEDED — TDCR Pattern — ${payload.email || "no email"} — Bust ${bust_cm}cm`,
+      subject: `⏳ REVIEW NEEDED — TDCR Pattern — ${payload.email || "no email"} — Bust ${payload.Bust_cm}cm`,
       html: `
         <h2>TDCR Pattern ready for review</h2>
+        <p>A new top-down circle raglan pattern has been generated. Please review the attached PDF before it is sent to the customer.</p>
         <p><strong>Customer:</strong> ${payload.email || "no email"}</p>
-        <p><strong>Inputs:</strong> Bust ${bust_cm}cm · Gauge ${gauge_sts}st/${gauge_rows}row · ${ease_preference} · ${length_preference}</p>
+        <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row · ${payload.Ease_preference} · ${payload.Length_preference}</p>
+        <p><strong>Calculator checks:</strong> ${JSON.stringify(calcJson.checks)}</p>
         <p><strong>Validation warnings:</strong> ${JSON.stringify(validation.warnings || [])}</p>
         <hr>
         <p>
@@ -413,66 +461,82 @@ export const tdcrPipelineTask = task({
         <h3>Calculation Log</h3>
         <pre style="font-size:11px;background:#f5f5f5;padding:12px">${calcLog || "not generated"}</pre>
       `,
-      attachments: [{ filename: `tdcr-pattern-${bust_cm}cm.pdf`, content: pdfBase64 }],
+      attachments: [
+        {
+          filename: `tdcr-pattern-${payload.Bust_cm}cm.pdf`,
+          content: pdfBase64,
+        },
+      ],
     });
 
-    // ── Step 7: Wait for admin approval ───────────────────────────
-    logger.log("Waiting for admin approval...");
+    // ── Step 7: Wait for admin approval (up to 48 hours) ──────────
+    logger.log("Waiting for TDCR admin approval...");
     const approvalResult = await wait.forToken<{ action: string }>(token.id);
-    logger.log("Approval result", { result: JSON.stringify(approvalResult) });
+
+    logger.log("TDCR Approval result", { result: JSON.stringify(approvalResult) });
 
     const output = approvalResult.ok ? (approvalResult.output as any) : null;
     const action = output?.data?.action || output?.action;
-
     if (action !== "approve") {
-      logger.log("TDCR pattern rejected or timed out — not sending to customer");
+      logger.log("TDCR Pattern rejected or timed out — not sending to customer");
       await resend.emails.send({
         from: fromEmail,
         to: [adminEmail],
-        subject: `❌ TDCR Pattern NOT sent — ${payload.email || "no email"} — Bust ${bust_cm}cm`,
-        html: `<p>The pattern was <strong>rejected</strong> (or approval timed out) and was <strong>not</strong> sent to the customer.</p>`,
+        subject: `❌ TDCR Pattern NOT sent — ${payload.email || "no email"} — Bust ${payload.Bust_cm}cm`,
+        html: `<p>The TDCR pattern was <strong>rejected</strong> (or approval timed out) and was <strong>not</strong> sent to the customer.</p>`,
       });
       return { status: "rejected", runId: ctx.run.id };
     }
 
-    logger.log("TDCR pattern approved — sending to customer...");
+    logger.log("TDCR Pattern approved — sending to customer...");
 
     // ── Step 8: Send pattern PDF to customer ──────────────────────
     if (payload.email) {
       await resend.emails.send({
         from: fromEmail,
         to: [payload.email],
-        subject: "Your Top-Down Raglan Sweater Pattern is ready! 🧶",
+        subject: "Your personalised knitting pattern is ready 🧶",
         html: `
           <p>Hello,</p>
           <p>Thank you for your order. Your personalised top-down raglan sweater pattern is attached as a PDF.</p>
           <p>If you have any questions, simply reply to this email.</p>
           <p>Happy knitting!</p>
         `,
-        attachments: [{ filename: `your-sweater-pattern.pdf`, content: pdfBase64 }],
+        attachments: [
+          {
+            filename: `your-sweater-pattern.pdf`,
+            content: pdfBase64,
+          },
+        ],
       });
-      logger.log("TDCR pattern PDF sent to customer", { to: payload.email });
+      logger.log("TDCR Pattern PDF sent to customer", { to: payload.email });
     }
 
     // ── Step 9: Send admin confirmation copy ──────────────────────
     await resend.emails.send({
       from: fromEmail,
       to: [adminEmail],
-      subject: `✅ TDCR Pattern SENT — ${payload.email || "no email"} — Bust ${bust_cm}cm`,
+      subject: `✅ TDCR Pattern SENT — ${payload.email || "no email"} — Bust ${payload.Bust_cm}cm`,
       html: `
         <h2>TDCR Pattern sent successfully</h2>
         <p><strong>Run ID:</strong> ${ctx.run.id}</p>
         <p><strong>Customer:</strong> ${payload.email || "no email"}</p>
-        <p><strong>Inputs:</strong> Bust ${bust_cm}cm · Gauge ${gauge_sts}st/${gauge_rows}row · ${ease_preference} · ${length_preference}</p>
+        <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row · ${payload.Ease_preference} · ${payload.Length_preference}</p>
+        <p><strong>Calculator checks:</strong> ${JSON.stringify(calcJson.checks)}</p>
         <p><strong>Validation warnings:</strong> ${JSON.stringify(validation.warnings || [])}</p>
         <hr>
         <h3>Calculation Log</h3>
         <pre style="font-size:11px;background:#f5f5f5;padding:12px">${calcLog || "not generated"}</pre>
       `,
-      attachments: [{ filename: `tdcr-pattern-${bust_cm}cm.pdf`, content: pdfBase64 }],
+      attachments: [
+        {
+          filename: `tdcr-pattern-${payload.Bust_cm}cm.pdf`,
+          content: pdfBase64,
+        },
+      ],
     });
 
-    logger.log("TDCR pipeline complete ✅");
+    logger.log("TDCR Pipeline complete ✅");
     return { status: "success", runId: ctx.run.id };
   },
 });
@@ -485,7 +549,7 @@ export const tallyWebhookTask = task({
 
   run: async (payload: any) => {
     const tallyData = payload.payload || payload;
-    logger.log("Raw fields", { f: JSON.stringify(tallyData.data?.fields?.map((f: any) => f.label)) });
+    logger.log("Raw fields", { f: JSON.stringify(tallyData.data?.fields?.map((f:any) => f.label)) });
     const fields = extractTallyFields(tallyData);
 
     if ("error" in fields) {
