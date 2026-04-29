@@ -13,6 +13,7 @@ interface TdcrPayload {
   Gauge_row: number;
   Ease_preference: string;
   Length_preference: string;
+  Sleeve_length_cm: number;
   construction_method?: string;
 }
 
@@ -313,6 +314,7 @@ export const tdcrPipelineTask = task({
       gauge_rows: payload.Gauge_row,
       ease_preference: payload.Ease_preference,
       length_preference: payload.Length_preference,
+      sleeve_length_cm: payload.Sleeve_length_cm,
     };
 
     // ── Steps 1 & 2: Calculator + Validator (with retry) ──────────
@@ -658,7 +660,8 @@ function extractTallyFields(payload: TallyWebhookPayload): any {
     const isTdcr = result.construction_method === 'knitted in one piece, from the top down (seamless)';
 
     const required = isTdcr
-      ? ["Bust_cm", "Gauge_st", "Gauge_row", "Ease_preference", "Length_preference"]
+      ? ["Bust_cm", "Gauge_st", "Gauge_row", "Ease_preference", "Length_preference",
+         "Sleeve_length_cm"]
       : ["Bust_cm", "Gauge_st", "Gauge_row", "Ease_preference", "Length_preference",
          "Front_neck_depth_for_V_cm", "Sleeve_length_cm"];
 
