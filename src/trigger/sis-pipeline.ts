@@ -109,7 +109,34 @@ export const sisPipelineTask = task({
           });
           return { status: "user_input_error", reason: "v_neck_too_shallow" };
         }
-
+// ── Developer-only alerts: flag to admin, no customer email ──
+        // YY ≥ 2 and sleeve-too-short are deterministic — retrying won't
+        // help. Send a clear admin alert and exit cleanly. Customer
+        // gets nothing automated; admin emails them manually.
+        if (incompatibility === "v_neck_too_deep_for_fit" || incompatibility === "sleeve_too_short") {
+          await resend.emails.send({
+            from: fromEmail,
+            to: [adminEmail],
+            subject: `⚠️ SIS calculator user-input error — ${incompatibility} — ${payload.email || "no email"}`,
+            html: `
+              <h3>Customer hit a calculator guard — manual response needed</h3>
+              <p><strong>Incompatibility:</strong> ${incompatibility}</p>
+              <p><strong>Calculator message:</strong> ${msg}</p>
+              <p><strong>Customer email:</strong> ${payload.email || "(none)"}</p>
+              <p><strong>Inputs:</strong></p>
+              <ul>
+                <li>Bust: ${payload.Bust_cm} cm</li>
+                <li>Gauge: ${payload.Gauge_st} sts / ${payload.Gauge_row} rows per 10 cm</li>
+                <li>Ease: ${payload.Ease_preference}</li>
+                <li>V-neck depth: ${payload.Front_neck_depth_for_V_cm} cm</li>
+                <li>Sleeve length: ${payload.Sleeve_length_cm} cm</li>
+              </ul>
+              <p><strong>Run ID:</strong> ${ctx.run.id}</p>
+            `,
+          });
+          logger.log("Developer-alert sent for user-input error", { incompatibility });
+          return { status: "user_input_error", reason: incompatibility };
+        }
         if (attempt === 3) {
           await sendAlert(resend, fromEmail, adminEmail, "Calculator error", msg, payload);
           throw new Error(`Calculator failed after 3 attempts: ${msg}`);
