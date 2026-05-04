@@ -70,16 +70,52 @@ export const sisPipelineTask = task({
         payload
       );
 
-      if (calcResult.error || calcResult.data?.error) {
+if (calcResult.error || calcResult.data?.error) {
         const msg = calcResult.error || calcResult.data?.error;
-        logger.error(`Calculator attempt ${attempt} failed`, { msg });
+        const incompatibility = calcResult.data?.incompatibility;
+
+        logger.error(`Calculator attempt ${attempt} failed`, { msg, incompatibility });
+
+        // ── User-input error: V-neck too shallow for gauge ─────────
+        // Deterministic — retrying won't change the answer. Send the
+        // customer a friendly resubmit email and exit cleanly.
+        if (incompatibility === "v_neck_too_shallow") {
+          if (payload.email) {
+            await resend.emails.send({
+              from: fromEmail,
+              to: [payload.email],
+              subject: "Pattern generation failed — V-neck depth too shallow for your gauge",
+              html: `
+                <p>Hi,</p>
+                <p>Unfortunately we were unable to generate your pattern. Your V-neck depth of <strong>${payload.Front_neck_depth_for_V_cm} cm</strong> is too shallow for your gauge (<strong>${payload.Gauge_st} sts / ${payload.Gauge_row} rows per 10 cm</strong>): the neck shaping would need to start before the armhole shaping has finished, which produces an invalid shaping schedule.</p>
+                <p>Please re-submit with a V-neck depth of at least <strong>18 cm</strong>. If you are unsure, a depth of 18–22 cm works reliably across all sizes and gauges.</p>
+                <p>We have not charged you for this submission.</p>
+                <p><a href="${process.env.TALLY_FORM_URL || appUrl}">Re-submit your measurements →</a></p>
+                <p>If you have any questions, simply reply to this email.</p>
+              `,
+            });
+            logger.log("V-neck-too-shallow resubmit email sent to customer", { to: payload.email });
+          }
+          // Quiet admin notice — not a system alert, just a record.
+          await resend.emails.send({
+            from: fromEmail,
+            to: [adminEmail],
+            subject: `ℹ️ SIS user-input error — V-neck too shallow — ${payload.email || "no email"}`,
+            html: `
+              <p>Customer hit the V-neck-too-shallow guard. Friendly resubmit email sent automatically.</p>
+              <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · V ${payload.Front_neck_depth_for_V_cm}cm · Gauge ${payload.Gauge_st}/${payload.Gauge_row} · ${payload.Ease_preference}</p>
+              <p><strong>Run ID:</strong> ${ctx.run.id}</p>
+            `,
+          });
+          return { status: "user_input_error", reason: "v_neck_too_shallow" };
+        }
+
         if (attempt === 3) {
           await sendAlert(resend, fromEmail, adminEmail, "Calculator error", msg, payload);
           throw new Error(`Calculator failed after 3 attempts: ${msg}`);
         }
         continue;
       }
-
       calcJson = calcResult.data;
       logger.log(`Calculator attempt ${attempt} complete`, {
         nodes_active: calcJson.decision_path?.nodes_active,
