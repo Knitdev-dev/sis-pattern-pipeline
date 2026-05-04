@@ -70,7 +70,7 @@ export const sisPipelineTask = task({
         payload
       );
 
-if (calcResult.error || calcResult.data?.error) {
+      if (calcResult.error || calcResult.data?.error) {
         const msg = calcResult.error || calcResult.data?.error;
         const incompatibility = calcResult.data?.incompatibility;
 
