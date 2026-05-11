@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Set-In Sleeve Sweater — Your Personal Knitting Pattern</title>
+<link href="https://fonts.googleapis.com/css2?family=League+Spartan:wght@400;600;700;900&amp;family=Lora:ital,wght@0,400;0,600;1,400&amp;display=swap" rel="stylesheet"/>
+<style>
+  /* ── PAGE RULES (Paged.js) ── */
+  @page {
+    size: A4;
+    margin: 20mm 16mm 22mm 16mm;
+
+    @top-left {
+      content: "Your Personal Knitting Pattern";
+      font-family: 'League Spartan', sans-serif;
+      font-size: 7.5pt;
+      font-weight: 700;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: #8a7a62;
+      padding-bottom: 4mm;
+      border-bottom: 1px solid rgba(0,0,0,0.13);
+      width: 100%;
+    }
+    @top-right {
+      content: string(section-title);
+      font-family: 'League Spartan', sans-serif;
+      font-size: 7.5pt;
+      font-weight: 400;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #8a7a62;
+      padding-bottom: 4mm;
+      border-bottom: 1px solid rgba(0,0,0,0.13);
+      width: 100%;
+      text-align: right;
+    }
+    @bottom-left {
+      content: "Knitpage";
+      font-family: 'League Spartan', sans-serif;
+      font-size: 7.5pt;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #6b6158;
+      padding-top: 3mm;
+      border-top: 1px solid rgba(0,0,0,0.13);
+      width: 100%;
+    }
+    @bottom-right {
+      content: "Page " counter(page);
+      font-family: 'League Spartan', sans-serif;
+      font-size: 7.5pt;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #6b6158;
+      padding-top: 3mm;
+      border-top: 1px solid rgba(0,0,0,0.13);
+      width: 100%;
+      text-align: right;
+    }
+  }
+
+  /* Cover page — no margins, no header/footer */
+  @page cover {
+    margin: 0;
+    @top-left { content: none; }
+    @top-right { content: none; }
+    @bottom-left { content: none; }
+    @bottom-right { content: none; }
+  }
+
+  /* Suppress header on the very first content page (right after cover) */
+  @page :first {
+    @top-left { content: none; }
+    @top-right { content: none; }
+  }
+
+  /* ── DESIGN TOKENS ── */
+  :root {
+    --bg: #f5f2ed;
+    --ink: #1a1612;
+    --mid: #6b6158;
+    --accent: #8a7a62;
+    --rule: rgba(0,0,0,0.13);
+    --highlight-bg: #eeeae3;
+    --warn-bg: #fdf6ec;
+    --warn-border: #c89a4a;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    background: var(--bg);
+    font-family: 'Lora', Georgia, serif;
+    color: var(--ink);
+  }
+
+  /* ── COVER ── */
+  .cover {
+    page: cover;
+    break-after: page;
+    width: 210mm;
+    height: 297mm;
+    position: relative;
+    overflow: hidden;
+  }
+  .cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .cover-title-block {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: linear-gradient(to bottom, transparent 0%, rgba(10,8,6,0.68) 38%, rgba(10,8,6,0.82) 100%);
+    padding: 18mm 11mm 11mm 11mm;
+  }
+  .cover-title-label {
+    font-family: 'League Spartan', sans-serif;
+    font-size: 7.5pt;
+    font-weight: 700;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.65);
+    display: block;
+    margin-bottom: 2.5mm;
+  }
+  .cover-title-name {
+    font-family: 'League Spartan', sans-serif;
+    font-size: 22pt;
+    font-weight: 900;
+    letter-spacing: -0.5px;
+    text-transform: uppercase;
+    color: #fff;
+    line-height: 1.05;
+  }
+
+  /* ── SECTION HEADINGS — drive page breaks AND running header ── */
+  h1.section {
+    font-family: 'League Spartan', sans-serif;
+    font-size: 20pt;
+    font-weight: 900;
+    letter-spacing: -0.5px;
+    text-transform: uppercase;
+    color: var(--ink);
+    margin-bottom: 5mm;
+    margin-top: 0;
+    padding-bottom: 2.5mm;
+    border-bottom: 2px solid var(--ink);
+
+    break-before: page;
+    string-set: section-title content();
+    break-after: avoid;
+  }
+  /* First section after cover should not force an extra page (cover already breaks) */
+  .cover + h1.section { break-before: auto; }
+
+  h2.subsection {
+    font-family: 'League Spartan', sans-serif;
+    font-size: 12pt;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--ink);
+    margin-top: 6mm;
+    margin-bottom: 3mm;
+    break-after: avoid;
+  }
+
+  /* ── BODY TEXT ── */
+  p, ol, ul, li {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 10pt;
+    line-height: 1.65;
+    color: var(--ink);
+  }
+  p { margin-bottom: 3mm; orphans: 3; widows: 3; }
+  ol, ul { margin: 0 0 3mm 0; padding-left: 6mm; }
+  li { margin-bottom: 1mm; }
+
+  /* ── PATTERN DETAILS TABLE ── */
+  .details-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 6mm;
+  }
+  .details-table td {
+    padding: 2.5mm 3mm;
+    font-size: 10pt;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  .details-table td:first-child {
+    font-family: 'League Spartan', sans-serif;
+    font-size: 8.5pt;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--mid);
+    width: 42%;
+    padding-right: 4mm;
+  }
+  .details-table td:last-child {
+    font-family: 'Lora', serif;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  /* ── STITCH COUNT BOX ── */
+  .stitch-box {
+    background: var(--highlight-bg);
+    border-left: 3px solid var(--accent);
+    padding: 3mm 4mm;
+    margin: 3.5mm 0;
+    font-size: 9.5pt;
+    line-height: 1.6;
+    break-inside: avoid;
+  }
+  .stitch-box .label {
+    font-family: 'League Spartan', sans-serif;
+    font-size: 7.5pt;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 1.5mm;
+  }
+
+  /* ── FLAG / WARNING BOX ── */
+  .flag-box {
+    background: var(--warn-bg);
+    border-left: 3px solid var(--warn-border);
+    padding: 3mm 4mm;
+    margin: 3.5mm 0;
+    font-size: 9.5pt;
+    line-height: 1.6;
+    font-style: italic;
+    color: #5a4a20;
+    break-inside: avoid;
+  }
+
+  /* ── INSTRUCTION ROW ── */
+  .instr { margin-bottom: 2mm; font-size: 10pt; line-height: 1.6; }
+  .instr strong {
+    font-family: 'League Spartan', sans-serif;
+    font-weight: 700;
+    font-size: 9pt;
+    letter-spacing: 0.3px;
+  }
+
+  /* ── STITCH LIBRARY NOTE ── */
+  .stitch-note {
+    font-family: 'Lora', serif;
+    font-style: italic;
+    font-size: 9pt;
+    color: var(--mid);
+    border: 1px dashed rgba(0,0,0,0.15);
+    padding: 2.5mm 3.5mm;
+    margin: 3mm 0;
+    break-inside: avoid;
+  }
+
+  /* ── DIVIDER ── */
+  .divider { border: none; border-top: 1px solid var(--rule); margin: 5mm 0; }
+
+  /* ── PIECE LABEL ── */
+  .piece-label {
+    font-family: 'League Spartan', sans-serif;
+    font-size: 8pt;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    display: inline-block;
+    padding: 1mm 3mm;
+    margin-bottom: 4mm;
+    margin-top: 2mm;
+  }
+
+  /* ── SCHEMATIC ── */
+  .schematic-wrapper {
+    margin: 3mm 0 5mm;
+    text-align: center;
+    break-inside: avoid;
+  }
+  .schematic {
+    display: block;
+    width: 100%;
+    max-width: 160mm;
+    height: auto;
+    margin: 0 auto;
+  }
+  .schematic .piece {
+    fill: var(--bg);
+    stroke: var(--accent);
+    stroke-width: 1.4;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    vector-effect: non-scaling-stroke;
+  }
+  .schematic .dim-line {
+    stroke: var(--accent);
+    stroke-width: 0.7;
+    fill: none;
+    vector-effect: non-scaling-stroke;
+  }
+  .schematic .dim-label {
+    font-family: 'League Spartan', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    font-style: italic;
+    fill: var(--ink);
+  }
+</style>
+<script>
+window.PagedConfig = {
+  auto: true,
+  after: function() {
+    document.body.setAttribute('data-paged-done', 'true');
+  }
+};
+</script>
+<script src="https://unpkg.com/pagedjs/dist/paged.polyfill.js"></script></head>
