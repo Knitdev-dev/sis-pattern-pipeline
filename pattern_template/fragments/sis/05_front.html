@@ -1,0 +1,193 @@
+
+
+<!-- ════════════════════════════════════════
+     PAGE 4 — FRONT PIECE (BODY + ARMHOLE)
+════════════════════════════════════════ -->
+
+
+<div class="flag-box"><strong>Selvedge Stitches.</strong> All stitch counts in this pattern include 2 selvedge stitches — one at each edge. On RS rows: slip the first stitch, knit the last stitch. On WS rows: slip the first stitch, purl the last stitch. These stitches are not mentioned explicitly in the instructions; work them automatically at the start and end of every row.</div>
+<h1 class="section">3. Front</h1>
+<h2 class="subsection">Cast On and Ribbed Band</h2>
+<p>Cast on <strong>{Front_width_st}</strong> sts using smaller needles. Work the 1×1 ribbed band as follows. <strong>RS:</strong> k1, p1 to end. <strong>WS:</strong> if the stitch count is even, k1, p1 to end; if uneven, p1, k1 to end. Continue until the ribbed band measures 9 cm. Then change to larger needles.</p>
+<div class="stitch-box">
+<span class="label">After ribbed band</span>
+    Sts on needle: <strong>{Front_width_st}</strong>. Band measures 9 cm.
+  </div>
+<div class="flag-box"><strong>Tip:</strong> The long-tail cast-on gives a clean, stretchy edge that sits beautifully at the bottom of a ribbed band. If you haven't tried it, this is a great pattern to start — it's easier than it looks. <a href="https://www.youtube.com/watch?v=IzVy8fRfOw0" style="color:var(--accent)">Video tutorial</a>.</div>
+<div class="instr"><strong>RS:</strong> Knit to end.</div>
+<div class="instr"><strong>WS:</strong> Purl to end.</div>
+<p>Work until piece measures <strong>{Body_length_to_armhole_cm} cm</strong> from cast-on edge. End after a WS row.</p>
+<div class="stitch-box">
+<span class="label">After body</span>
+    Rows: <strong>{PP11}</strong>. Sts: <strong>{Front_width_st}</strong> — unchanged.
+  </div>
+<h2 class="subsection">Underarm Bind Off</h2>
+<p>Bind off <strong>{Underarm_bindoff_sts}</strong> sts at the beginning of the next 2 rows. <strong>{Sts_after_UA_bindoff}</strong> sts remain.</p>
+<div class="stitch-box">
+<span class="label">After underarm bind-off</span>
+    Rows: <strong>{PP11_plus_2}</strong>. Sts: <strong>{Sts_after_UA_bindoff}</strong>.
+  </div>
+<h2 class="subsection">Armhole Decreases</h2>
+<!-- TEXT NODE B — V neck starts after underarm but before end of armhole decreases -->
+<p>In this section, decreases are worked at both armhole edges on every RS row, shaping the armhole before V-neck shaping begins.</p>
+<div class="instr"><strong>RS:</strong> k1, ssk, work to last 3 sts, k2tog, k1.</div>
+<div class="instr"><strong>WS:</strong> Purl to end.</div>
+<p>Work a total of <strong>{Pre_neck_armhole_pairs}</strong> times. Finish with a WS row. <strong>{Sts_entering_neck}</strong> sts remain.</p>
+<div class="stitch-box">
+<span class="label">After armhole-only decreases</span>
+    Rows: <strong>{Rows_after_armdec_front}</strong>. Sts: <strong>{Sts_entering_neck}</strong>.
+  </div>
+
+
+<!-- ════════════════════════════════════════
+     PAGE 5 — FRONT: V-NECK SHAPING
+════════════════════════════════════════ -->
+
+
+<h2 class="subsection">Divide for the V Neck</h2>
+<p>On the next RS: k1, ssk, knit <strong>{PP2 - 4}</strong> sts, slip the next stitch to a holder (centre stitch), place the remaining <strong>{PP2}</strong> sts onto a second holder. The centre stitch is on its own holder; the stitches on the second holder are the right front; the live stitches are the left front. There are <strong>{PP3}</strong> total live stitches, including <strong>{PP3 - 2}</strong> working stitches, and 2 selvedge stitches (note that one working stitch on the neck side was absorbed by the selvedge stitch).</p>
+<p>Turn the work. WS: purl to end.</p>
+<div class="stitch-box">
+<span class="label">After division</span>
+    Rows: <strong>{Rows_after_division_left}</strong>. Live sts left front: <strong>{PP3}</strong>.
+  </div>
+<div class="flag-box"><strong>Tip:</strong> Before working the division row, place a locking stitch marker on the centre stitch. This makes it easy to locate when picking up for the neckband later, and removes any guesswork mid-row.</div>
+<p>In this section we work simultaneous decreases on both the V-neck edge and the armhole edge.</p>
+<!-- TEXT NODE E1a — include when Node_E_result = "E1a" -->
+<!--
+  <div class="instr"><strong>RS:</strong> k1, ssk, work to last 3 sts, k2tog, k1.</div>
+  <div class="instr"><strong>WS:</strong> Purl to end.</div>
+  <p>Two stitches decreased each RS row: one armhole side, one neck side. Work a total of <strong>{ZZ}</strong> times.</p>
+  <div class="stitch-box">
+    <span class="label">After simultaneous decreases</span>
+    Rows: <strong>{Rows_after_sim_dec_left}</strong>. Sts: <strong>{PP5}</strong>.
+  </div>
+  -->
+<!-- TEXT NODE F — include when Node_E_result = "E1a" AND Node_F_result = "YES" -->
+<!--
+  <p>Armhole shaping is complete. Work neck-only decreases; the armhole edge is worked plain.</p>
+  <div class="instr"><strong>RS:</strong> Knit to last 3 sts, k2tog, k1.</div>
+  <div class="instr"><strong>WS:</strong> Purl to end.</div>
+  <p>Work a total of <strong>{Post_armhole_neck_pairs}</strong> times.</p>
+  <div class="stitch-box">
+    <span class="label">After neck-only decreases</span>
+    Rows: <strong>{Rows_after_neck_dec_left}</strong>. Sts: <strong>{Front_shoulder_sts_per_side}</strong>.
+  </div>
+  -->
+<!-- TEXT NODE E1b — include when Node_E_result = "E1b" -->
+<!-- FORMATTER: Generate run-by-run instructions from neck_rs_runs_zz (E1b ZZ left front),
+       then stitch box, then "Armhole shaping complete.", then neck_rs_runs_post (E1b post-ZZ left front),
+       then stitch box. Use instr divs and stitch-box divs matching the style in this template. -->
+<!--
+  <div class="stitch-box">
+    <span class="label">After simultaneous decreases</span>
+    Rows: <strong>{Rows_after_sim_dec_left}</strong>.
+  </div>
+  <div class="stitch-box">
+    <span class="label">After neck-only decreases</span>
+    Rows: <strong>{Rows_after_neck_dec_left}</strong>. Sts: <strong>{Front_shoulder_sts_per_side}</strong>.
+  </div>
+  -->
+<!-- TEXT NODE E1_WS — include when Node_E_result = "E1_WS" -->
+<!-- FORMATTER: Generate run-by-run instructions from neck_ws_runs_zz (E1_WS ZZ left front),
+       then stitch box, then "Armhole shaping complete.", then neck_ws_runs_post (E1_WS post-ZZ left front),
+       then stitch box. Use instr divs and stitch-box divs matching the style in this template. -->
+<!--
+  <div class="stitch-box">
+    <span class="label">After simultaneous decreases</span>
+    Rows: <strong>{Rows_after_sim_dec_left}</strong>. Sts: <strong>{PP5}</strong>.
+  </div>
+  <div class="stitch-box">
+    <span class="label">After neck-only decreases</span>
+    Rows: <strong>{Rows_after_neck_dec_left}</strong>. Sts: <strong>{Front_shoulder_sts_per_side}</strong>.
+  </div>
+  -->
+<!-- TEXT NODE G — include when Node_G_result = "YES" -->
+<!--
+  <div class="instr"><strong>RS:</strong> Knit to end.</div>
+  <div class="instr"><strong>WS:</strong> Purl to end.</div>
+  <p>Work until piece measures <strong>{Length_to_shoulder} cm</strong> from cast-on edge. End after a WS row.</p>
+  -->
+<!-- TEXT NODE H — always included -->
+<p>Bind off <strong>{Bindoff_group_1}</strong> sts at the beginning of the next RS row, work 1 WS row. Bind off <strong>{Bindoff_group_2}</strong> sts at the beginning of the next RS row, work 1 WS row. Bind off the remaining sts at the beginning of the next RS row.</p>
+<div class="stitch-box">
+<span class="label">Left front complete</span>
+    Rows: <strong>{Rows_left_front_complete}</strong>. All shoulder sts bound off.
+  </div>
+
+
+<!-- ════════════════════════════════════════
+     PAGE 6 — FRONT: RIGHT SIDE
+════════════════════════════════════════ -->
+
+
+<h2 class="subsection">Right Front</h2>
+<p>Transfer the held right front stitches back to the needle. There are <strong>{PP2}</strong> stitches. Leave the centre stitch on its holder for now — it will be picked up when working the neckband. Join yarn at the neck edge, ready to work a RS row.</p>
+<div class="instr"><strong>RS:</strong> Knit to last 3 sts, k2tog, k1.</div>
+<div class="instr"><strong>WS:</strong> Purl to end.</div>
+<div class="stitch-box">
+<span class="label">After first RS row</span>
+    Rows: <strong>{Rows_right_first_rs}</strong>. Live sts right front: <strong>{PP3}</strong>.
+  </div>
+<!-- TEXT NODE E1a right front — include when Node_E_result = "E1a" -->
+<!--
+  <div class="instr"><strong>RS:</strong> k1, ssk, work to last 3 sts, k2tog, k1.</div>
+  <div class="instr"><strong>WS:</strong> Purl to end.</div>
+  <p>Two stitches decreased each RS row: one neck side (ssk), one armhole side (k2tog). Work a total of <strong>{ZZ}</strong> times.</p>
+  <div class="stitch-box">
+    <span class="label">After simultaneous decreases</span>
+    Rows: <strong>{Rows_after_sim_dec_right}</strong>. Sts: <strong>{PP5}</strong>.
+  </div>
+  -->
+<!-- TEXT NODE F right front — include when Node_E_result = "E1a" AND Node_F_result = "YES" -->
+<!--
+  <p>Armhole shaping is complete. Work neck-only decreases; the armhole edge is worked plain.</p>
+  <div class="instr"><strong>RS:</strong> k1, ssk, knit to end.</div>
+  <div class="instr"><strong>WS:</strong> Purl to end.</div>
+  <p>Work a total of <strong>{Post_armhole_neck_pairs}</strong> times.</p>
+  <div class="stitch-box">
+    <span class="label">After neck-only decreases</span>
+    Rows: <strong>{Rows_after_neck_dec_right}</strong>. Sts: <strong>{Front_shoulder_sts_per_side}</strong>.
+  </div>
+  -->
+<!-- TEXT NODE E1b right front — include when Node_E_result = "E1b" -->
+<!-- FORMATTER: Generate run-by-run instructions from neck_rs_runs_zz (E1b ZZ right front),
+       then stitch box, then "Armhole shaping complete.", then neck_rs_runs_post (E1b post-ZZ right front),
+       then stitch box. Use instr divs and stitch-box divs matching the style in this template. -->
+<!--
+  <div class="stitch-box">
+    <span class="label">After simultaneous decreases</span>
+    Rows: <strong>{Rows_after_sim_dec_right}</strong>.
+  </div>
+  <div class="stitch-box">
+    <span class="label">After neck-only decreases</span>
+    Rows: <strong>{Rows_after_neck_dec_right}</strong>. Sts: <strong>{Front_shoulder_sts_per_side}</strong>.
+  </div>
+  -->
+<!-- TEXT NODE E1_WS right front — include when Node_E_result = "E1_WS" -->
+<!-- FORMATTER: Generate run-by-run instructions from neck_ws_runs_zz (E1_WS ZZ right front),
+       then stitch box, then "Armhole shaping complete.", then neck_ws_runs_post (E1_WS post-ZZ right front),
+       then stitch box. Use instr divs and stitch-box divs matching the style in this template. -->
+<!--
+  <div class="stitch-box">
+    <span class="label">After simultaneous decreases</span>
+    Rows: <strong>{Rows_after_sim_dec_right}</strong>. Sts: <strong>{PP5}</strong>.
+  </div>
+  <div class="stitch-box">
+    <span class="label">After neck-only decreases</span>
+    Rows: <strong>{Rows_after_neck_dec_right}</strong>. Sts: <strong>{Front_shoulder_sts_per_side}</strong>.
+  </div>
+  -->
+<!-- TEXT NODE G right front — include when Node_G_result = "YES" -->
+<!--
+  <div class="instr"><strong>RS:</strong> Knit to end.</div>
+  <div class="instr"><strong>WS:</strong> Purl to end.</div>
+  <p>Work until piece measures <strong>{Length_to_shoulder} cm</strong> from cast-on edge. End after a WS row.</p>
+  -->
+<!-- TEXT NODE H right front — always included -->
+<p>Bind off <strong>{Bindoff_group_1}</strong> sts at the beginning of the next RS row, work 1 WS row. Bind off <strong>{Bindoff_group_2}</strong> sts at the beginning of the next RS row, work 1 WS row. Bind off the remaining sts at the beginning of the next RS row.</p>
+<div class="stitch-box">
+<span class="label">Right front complete</span>
+    Rows: <strong>{Rows_right_front_complete}</strong>. All shoulder sts bound off.
+  </div>
+

@@ -1,0 +1,188 @@
+<hr class="divider"/>
+<h2 class="subsection">Finished Measurements</h2>
+<p style="font-size:9.5pt;font-style:italic;margin-bottom:3mm;">See schematic on this page for measurement reference (a–e).</p>
+<div class="schematic-wrapper">
+<svg aria-label="Flat-lay schematic of body and sleeve pieces with measurement callouts a through e" class="schematic" data-armhole="{Armhole_depth_cm}" data-c="{C_cm}" data-length="{Finished_length_cm}" data-lower-sleeve="{Lower_sleeve_circ_cm}" data-shoulder="{Shoulder_width_cm}" data-sleeve-length="{Sleeve_length_cm}" data-upper-arm="{Upper_arm_cm}" viewbox="0 0 500 320" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<marker id="schematic-arrow" markerheight="6" markerunits="strokeWidth" markerwidth="6" orient="auto-start-reverse" refx="9" refy="5" viewbox="0 0 10 10">
+<path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)"></path>
+</marker>
+</defs>
+</svg>
+</div>
+<script>
+  (function buildSchematic() {
+    const svg = document.querySelector('svg.schematic');
+    if (!svg) return;
+    const ns = 'http://www.w3.org/2000/svg';
+    const ds = svg.dataset;
+    const C  = parseFloat(ds.c);
+    const L  = parseFloat(ds.length);
+    const AH = parseFloat(ds.armhole);
+    const SH = parseFloat(ds.shoulder);
+    const SL = parseFloat(ds.sleeveLength);
+    const UA = parseFloat(ds.upperArm);
+    const LS = parseFloat(ds.lowerSleeve);
+    // If any placeholder hasn't been substituted, leave the SVG empty rather than draw garbage.
+    if ([C, L, AH, SH, SL, UA, LS].some(v => !isFinite(v) || v <= 0)) return;
+
+    // ── Canvas & padding (px in viewBox space) ──
+    const W = 500, H = 320;
+    const padL = 32, padR = 32, padT = 26, padB = 38;
+    const gapPx = 30;                      // horizontal gap between body and sleeve pieces
+    const availW = W - padL - padR;
+    const availH = H - padT - padB;
+
+    // ── Convert cm → px with one uniform scale (preserves aspect ratio across both pieces) ──
+    const bodyWcm     = C / 2;             // flat piece is half the circumference
+    const sleeveTopCm = UA / 2;
+    const sleeveBotCm = LS / 2;
+    const sleeveMaxCm = Math.max(sleeveTopCm, sleeveBotCm);
+    const contentWcm  = bodyWcm + sleeveMaxCm;
+    const contentHcm  = Math.max(L, SL);
+    const scale = Math.min((availW - gapPx) / contentWcm, availH / contentHcm);
+
+    // ── Pixel dimensions ──
+    const bodyWpx = bodyWcm * scale;
+    const bodyHpx = L * scale;
+    const ahPx    = AH * scale;
+    const shPx    = Math.min(bodyWpx, SH * scale);   // safety: shoulder cannot exceed body width
+    const sTopPx  = sleeveTopCm * scale;
+    const sBotPx  = sleeveBotCm * scale;
+    const sHpx    = SL * scale;
+    const sleevePieceW = Math.max(sTopPx, sBotPx);
+
+    // ── Layout: centre both pieces in the available area, sitting on a shared baseline ──
+    const totalPiecesPx = bodyWpx + gapPx + sleevePieceW;
+    const startX    = padL + (availW - totalPiecesPx) / 2;
+    const baselineY = padT + (availH + Math.max(bodyHpx, sHpx)) / 2;
+
+    // ── Body geometry ──
+    const bx     = startX;
+    const byBot  = baselineY;
+    const byTop  = baselineY - bodyHpx;
+    const byArm  = byTop + ahPx;                     // y at which armhole notch begins
+    const cx     = bx + bodyWpx / 2;
+    const innerL = bx + (bodyWpx - shPx) / 2;
+    const innerR = bx + (bodyWpx + shPx) / 2;
+    const neckHalf  = shPx * 0.22;                   // neck width ≈ 44% of shoulder
+    const neckDepth = ahPx * 0.18;                   // shallow decorative dip
+
+    // ── Sleeve geometry ──
+    const sx      = bx + bodyWpx + gapPx;
+    const sCenter = sx + sleevePieceW / 2;
+    const sTopL   = sCenter - sTopPx / 2;
+    const sTopR   = sCenter + sTopPx / 2;
+    const sBotL   = sCenter - sBotPx / 2;
+    const sBotR   = sCenter + sBotPx / 2;
+    const syBot   = baselineY;
+    const syTop   = baselineY - sHpx;
+
+    function el(tag, attrs, text) {
+      const e = document.createElementNS(ns, tag);
+      for (const k in attrs) e.setAttribute(k, attrs[k]);
+      if (text != null) e.textContent = text;
+      svg.appendChild(e);
+      return e;
+    }
+
+    // ── Body piece path ──
+    // Bottom edge → up right side → into right armhole notch → up to right shoulder
+    // → across top with neck dip → down left shoulder → out of left notch → down left side → close
+    const bodyD = [
+      'M', bx, byBot,
+      'L', bx + bodyWpx, byBot,
+      'L', bx + bodyWpx, byArm,
+      'L', innerR, byArm,
+      'L', innerR, byTop,
+      'L', cx + neckHalf, byTop,
+      'Q', cx, byTop + neckDepth, cx - neckHalf, byTop,
+      'L', innerL, byTop,
+      'L', innerL, byArm,
+      'L', bx, byArm,
+      'Z'
+    ].join(' ');
+    el('path', { d: bodyD, class: 'piece' });
+
+    // ── Sleeve piece path (trapezoid, top wider than bottom) ──
+    const sleeveD = [
+      'M', sBotL, syBot,
+      'L', sBotR, syBot,
+      'L', sTopR, syTop,
+      'L', sTopL, syTop,
+      'Z'
+    ].join(' ');
+    el('path', { d: sleeveD, class: 'piece' });
+
+    // ── Dimension-line helpers ──
+    function dimLine(x1, y1, x2, y2) {
+      el('line', {
+        x1: x1, y1: y1, x2: x2, y2: y2,
+        class: 'dim-line',
+        'marker-start': 'url(#schematic-arrow)',
+        'marker-end':   'url(#schematic-arrow)'
+      });
+    }
+    function dimLabel(x, y, anchor, text) {
+      el('text', {
+        x: x, y: y,
+        'text-anchor': anchor,
+        'dominant-baseline': 'middle',
+        class: 'dim-label'
+      }, text);
+    }
+
+    // ── Callout 'a' — chest circumference, below body bottom edge ──
+    const aY = byBot + 14;
+    dimLine(bx, aY, bx + bodyWpx, aY);
+    dimLabel(cx, aY + 12, 'middle', 'a');
+
+    // ── Callout 'b' — body length, vertical along left of body ──
+    const bX = bx - 14;
+    dimLine(bX, byTop, bX, byBot);
+    dimLabel(bX - 6, (byTop + byBot) / 2, 'end', 'b');
+
+    // ── Callout 'e' — armhole depth, vertical extending body's right outer edge through the notch ──
+    const eX = bx + bodyWpx;
+    dimLine(eX, byTop, eX, byArm);
+    dimLabel(eX - 5, (byTop + byArm) / 2, 'end', 'e');
+
+    // ── Callout 'd' — upper arm circumference, above sleeve top edge ──
+    const dY = syTop - 14;
+    dimLine(sTopL, dY, sTopR, dY);
+    dimLabel(sCenter, dY - 5, 'middle', 'd');
+
+    // ── Callout 'c' — sleeve length, vertical along right of sleeve ──
+    const cX = Math.max(sTopR, sBotR) + 14;
+    dimLine(cX, syTop, cX, syBot);
+    dimLabel(cX + 6, (syTop + syBot) / 2, 'start', 'c');
+  })();
+  </script>
+<table class="details-table">
+<tr>
+<td>Chest circumference</td>
+<td><strong>{C_cm} cm</strong></td>
+</tr>
+<tr>
+<td>Body length (mid-back)</td>
+<td><strong>{Finished_length_cm} cm</strong></td>
+</tr>
+<tr>
+<td>Armhole depth</td>
+<td><strong>{Armhole_depth_cm} cm</strong></td>
+</tr>
+<tr>
+<td>Shoulder width (across back)</td>
+<td><strong>{Shoulder_width_cm} cm</strong></td>
+</tr>
+<tr>
+<td>Sleeve length (cuff to shoulder)</td>
+<td><strong>{Sleeve_length_cm} cm</strong></td>
+</tr>
+<tr>
+<td>Upper arm circumference</td>
+<td><strong>{Upper_arm_cm} cm</strong></td>
+</tr>
+</table>
+
+<p style="text-align:center;font-family:'League Spartan',sans-serif;font-size:7pt;color:var(--mid);margin-top:6mm;letter-spacing:1px;">Generated by Knitpage · knitpage.com · Pattern for personal use only.</p>
