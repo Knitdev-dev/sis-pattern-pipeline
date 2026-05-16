@@ -1,70 +1,254 @@
 <!-- ════════════════════════════════════════
-     PAGE 4 — FRONT PIECE (SaCaSIS: Sand-Cable panel)
+     PAGE 4 — FRONT PIECE (BODY + ARMHOLE) — SaCaSIS variant
 ════════════════════════════════════════ -->
 
 
 <div class="flag-box"><strong>Selvedge Stitches.</strong> All stitch counts in this pattern include 2 selvedge stitches — one at each edge. On RS rows: slip the first stitch, knit the last stitch. On WS rows: slip the first stitch, purl the last stitch. These stitches are not mentioned explicitly in the instructions; work them automatically at the start and end of every row.</div>
-
-<div class="flag-box"><strong>Cable panel.</strong> This front is worked with a central sand-cable panel of <strong>{SaCaSIS_K}</strong> cables (<strong>{SaCaSIS_Panel_sts}</strong> stitches), flanked by <strong>{SaCaSIS_Flank_sts_each}</strong> stockinette stitches on each side. The panel pulls in approximately 15&nbsp;% horizontally relative to stockinette; the body cast-on already accounts for this. Refer to the SaCaSIS chart on p.&nbsp;{Sacasis_chart_page} for the 10-row repeat.</div>
-
 <h1 class="section">3. Front</h1>
-
 <h2 class="subsection">Cast On and Ribbed Band</h2>
-<!-- TODO: Replicate the SIS cast-on/ribbed band copy but cast on Front_width_st_body (the cable-aware count) and add a setup row that places Bump_sts/2 increases on each side of where the cable panel will sit. Use SaCaSIS_transition_left_segments and SaCaSIS_transition_right_segments to drive the M1L/M1R placement. -->
-<p>⚠ TODO: SaCaSIS cast-on, ribbed band, and setup-row instructions. Reference variables: {SaCaSIS_Front_width_st_body}, {SaCaSIS_Bump_sts}, {SaCaSIS_transition_left_segments}, {SaCaSIS_transition_right_segments}.</p>
-
+<p>Cast on <strong>{Front_width_st}</strong> sts using smaller needles. Work the 1×1 ribbed band as follows. <strong>RS:</strong> k1, p1 to end. <strong>WS:</strong> if the stitch count is even, k1, p1 to end; if uneven, p1, k1 to end. Continue until the ribbed band measures 9 cm. Then change to larger needles.</p>
+<div class="stitch-box">
+<span class="label">After ribbed band</span>
+    Sts on needle: <strong>{Front_width_st}</strong>. Band measures 9 cm.
+  </div>
+<div class="flag-box"><strong>Tip:</strong> The long-tail cast-on gives a clean, stretchy edge that sits beautifully at the bottom of a ribbed band. If you haven't tried it, this is a great pattern to start — it's easier than it looks. <a href="https://www.youtube.com/watch?v=IzVy8fRfOw0" style="color:var(--accent)">Video tutorial</a>.</div>
+<h2 class="subsection">Setup Row — Cable Bump</h2>
+<p>This row distributes <strong>{SaCaSIS_Bump_sts}</strong> increases across the central area where the cable panel will sit, creating the extra stitches the cable will pull in. After this row you will have <strong>{SaCaSIS_Front_width_st_body}</strong> sts.</p>
+<!-- FORMATTER: Render the setup row by expanding the transition arrays.
+     Knit Flank_sts_each (left flank), then expand SaCaSIS_transition_left_segments by interleaving
+     M1R between each segment count (e.g. [5,5,5,5,5,5,6] becomes "k5, M1R, k5, M1R, k5, M1R, k5,
+     M1R, k5, M1R, k5, M1R, k6"), then k1 (centre stitch), then expand SaCaSIS_transition_right_segments
+     by interleaving M1L between each segment count, then knit Flank_sts_each (right flank). -->
+<div class="instr"><strong>RS (setup row):</strong> k{SaCaSIS_Flank_sts_each} (left flank), [LEFT_TRANSITION rendered from SaCaSIS_transition_left_segments with M1R between segments], k1 (centre stitch), [RIGHT_TRANSITION rendered from SaCaSIS_transition_right_segments with M1L between segments], k{SaCaSIS_Flank_sts_each} (right flank).</div>
+<div class="instr"><strong>WS:</strong> Purl to end.</div>
+<div class="stitch-box">
+<span class="label">After setup row</span>
+    Sts on needle: <strong>{SaCaSIS_Front_width_st_body}</strong>. Cable panel: <strong>{SaCaSIS_Panel_sts}</strong> sts centred; flanks <strong>{SaCaSIS_Flank_sts_each}</strong> sts each side.
+  </div>
 <h2 class="subsection">Cable Panel Setup</h2>
-<!-- TODO: Describe how the knitter establishes the cable panel on the first RS row after the bump is created. Reference SaCaSIS_Cable_full_repeat_rows (=10) and explain how to read the chart. -->
-<p>⚠ TODO: Cable panel setup instructions and reference to chart.</p>
-
-<h2 class="subsection">Body to Armhole</h2>
-<!-- TODO: Work even keeping the central {SaCaSIS_Panel_sts} stitches in cable pattern and the flanks in stockinette, until the body length matches Body_length_to_armhole_end_cm_front. Note: the cable adds vertical pull-in too — the cm-to-row math is in the calculator. -->
-<p>⚠ TODO: Body-to-armhole copy.</p>
-
+<p>The cable panel occupies the central <strong>{SaCaSIS_Panel_sts}</strong> stitches; <strong>{SaCaSIS_Flank_sts_each}</strong> stitches on each side are stockinette throughout. The central stitch of the panel is always plain k1.</p>
+<p>Rows 1–4 of the panel are plain (k on RS, p on WS). Cable crossings are on rows 5 (RS row) and 10 (WS row) and repeat every 10 rows.</p>
+<div class="instr"><strong>Rows 1–4 (panel):</strong> Work in stockinette (k on RS, p on WS).</div>
+<!-- FORMATTER: For Row 5 (RS) and Row 10 (WS) cable crosses, expand based on SaCaSIS_K (number of cables).
+     Structure: [Flank, *3/3R, k6*, ..., 3/3R, k7, *3/3R, k6*, ..., Flank]
+     where * to * is repeated 1 + ((K-1)/2 - 1) times when K > 1 (skip entirely for K=1).
+     Examples:
+       K=1: "k{Flank_sts_each}, 3/3R, k7, k{Flank_sts_each}"
+       K=3: "k{Flank_sts_each}, 3/3R, k6, 3/3R, k7, 3/3R, k6, k{Flank_sts_each}"
+       K=5: "k{Flank_sts_each}, 3/3R, k6, 3/3R, k6, 3/3R, k7, 3/3R, k6, 3/3R, k6, k{Flank_sts_each}"
+     Row 10 mirrors Row 5 using 3/3L(WS) for crossings and purls for the plain sts. -->
+<div class="instr"><strong>Row 5 (RS) — cable cross:</strong> See chart on p. {Sacasis_chart_page}. For <strong>{SaCaSIS_K}</strong> cables in the panel: k{SaCaSIS_Flank_sts_each}, [render row from formula above using SaCaSIS_K], k{SaCaSIS_Flank_sts_each}.</div>
+<div class="instr"><strong>Rows 6–9 (panel):</strong> Work in stockinette.</div>
+<div class="instr"><strong>Row 10 (WS) — cable cross:</strong> For <strong>{SaCaSIS_K}</strong> cables: p{SaCaSIS_Flank_sts_each}, [render row using 3/3L(WS) crossings and purls], p{SaCaSIS_Flank_sts_each}.</div>
+<p>Repeat rows 1–10 throughout the body and V-neck shaping.</p>
+<div class="instr"><strong>RS:</strong> Work in pattern (cable panel + stockinette flanks as established).</div>
+<div class="instr"><strong>WS:</strong> Work in pattern.</div>
+<p>Continue until piece measures <strong>{SaCaSIS_Front_Body_length_to_armhole_end_cm} cm</strong> from cast-on edge. End after a WS row.</p>
+<div class="stitch-box">
+<span class="label">After body</span>
+    Rows: <strong>{PP11}</strong>. Sts: <strong>{SaCaSIS_Front_width_st_body}</strong> — unchanged.
+  </div>
 <h2 class="subsection">Underarm Bind Off</h2>
-<!-- TODO: Same as SIS — bind off Underarm_bindoff_sts at the start of the next two rows. Confirm that no bindoff falls inside the cable panel; the calculator's flank-floor constraint guarantees this. -->
-<p>⚠ TODO: Underarm bindoff (likely identical to SIS).</p>
-
+<p>Bind off <strong>{Underarm_bindoff_sts}</strong> sts at the beginning of the next 2 rows. <strong>{SaCaSIS_Front_Sts_after_UA_bindoff}</strong> sts remain.</p>
+<div class="flag-box"><strong>Cable panel is safe.</strong> The underarm bind-off falls entirely within the stockinette flanks; the central cable panel is unaffected.</div>
+<div class="stitch-box">
+<span class="label">After underarm bind-off</span>
+    Rows: <strong>{PP11_plus_2}</strong>. Sts: <strong>{SaCaSIS_Front_Sts_after_UA_bindoff}</strong>.
+  </div>
 <h2 class="subsection">Armhole Decreases</h2>
-<!-- TODO: Decrease ADSt_front sts at each armhole edge over Armhole_decrease_rows_front rows. Confirm decreases stay in the stockinette flanks (not in the cable panel). -->
-<p>⚠ TODO: Armhole decrease sequence using {SaCaSIS_Front_Armhole_decrease_sts} and {SaCaSIS_Front_Armhole_decrease_rows}.</p>
+<p>Decreases are worked at both armhole edges on every RS row. Continue the 10-row cable repeat throughout — cable cross rows happen alongside the armhole decreases, exactly as established in the panel setup (RS crosses on rows 5, 15, 25…; WS crosses on rows 10, 20, 30…).</p>
+<div class="instr"><strong>All RS rows:</strong> k1, ssk, work in pattern (stockinette flanks + cable panel as established) to last 3 sts, k2tog, k1.</div>
+<div class="instr"><strong>All WS rows:</strong> Work in pattern — purl across, except on rows 10, 20, 30… where the WS cable cross is worked as established.</div>
+<p>Work a total of <strong>{SaCaSIS_Pre_neck_armhole_pairs}</strong> times. Finish with a WS row. <strong>{SaCaSIS_Sts_entering_neck}</strong> sts remain.</p>
+<div class="stitch-box">
+<span class="label">After armhole-only decreases</span>
+    Rows: <strong>{Rows_after_armdec_front}</strong>. Sts: <strong>{SaCaSIS_Sts_entering_neck}</strong>.
+  </div>
+
 
 <!-- ════════════════════════════════════════
-     V-NECK SHAPING — SaCaSIS variant
+     PAGE 5 — FRONT: V-NECK SHAPING (SaCaSIS variant)
 ════════════════════════════════════════ -->
 
+
+<h2 class="subsection">Mark Cable Boundaries</h2>
+<p>Before working the division row, place locking stitch markers at the beginning and end of each cable section within the panel. This makes it much easier to maintain cable alignment after the V division splits the panel.</p>
+<p>Each side cable spans <strong>12 stitches</strong> (the 6-stitch cable cross plus the 6-stitch k6 gap that follows it). The central cable spans <strong>13 stitches</strong> (the 6-stitch cable cross plus the 7-stitch k7 segment containing the V-apex k1 in its middle).</p>
+<p>Use locking markers, yarn snippets, or coilless safety pins. After division, only the markers within the active half-panel will be on your working needle.</p>
 <h2 class="subsection">Divide for the V Neck</h2>
-<!-- TODO: At division row {SaCaSIS_Division_row}, split the work down the central cable stitch. The cable panel is split so each front carries half the bump width plus its flank. -->
-<p>⚠ TODO: Division-row instructions referencing {SaCaSIS_Division_row}, {SaCaSIS_PP1} through {SaCaSIS_PP9}.</p>
-
+<p>On the next RS: k1, ssk, work in pattern <strong>{SaCaSIS_PP2 - 4}</strong> sts (stockinette flank and cable panel as established), slip the next stitch to a holder — this is the <strong>centre stitch</strong>. Place the remaining <strong>{SaCaSIS_PP2}</strong> sts onto a second holder. The centre stitch is on its own holder; the second holder carries the right front; the live stitches on your needle are the left front.</p>
+<p>There are <strong>{SaCaSIS_PP3}</strong> total live stitches: <strong>{SaCaSIS_PP3 - 2}</strong> working stitches plus 2 selvedge stitches.</p>
+<p>Turn the work. WS: purl to end.</p>
+<div class="stitch-box">
+<span class="label">After division</span>
+    Rows: <strong>{Rows_after_division_left}</strong>. Live sts left front: <strong>{SaCaSIS_PP3}</strong>.
+  </div>
+<div class="flag-box"><strong>Cable panel after division.</strong> The cable panel has been split. The left front now carries the <strong>left half of the panel</strong> (including the left half of the central cable). Continue the 10-row cable repeat as established — RS cable crosses still fall on rows 5, 15, 25…, and WS crosses on rows 10, 20, 30…</div>
+<div class="flag-box"><strong>Tip:</strong> Before working the division row, place a locking stitch marker on the centre stitch. This makes it easy to locate when picking up for the neckband later.</div>
+<div class="flag-box"><strong>When V-neck decreases reach a cable.</strong> Once the neck-edge decreases consume enough stitches that fewer than 6 remain in a cable cross, that cable can no longer be crossed — work those remaining stitches as plain stockinette from that row onward. The rest of the cable panel continues the 10-row repeat normally.</div>
+<p>In this section we work simultaneous decreases on both the V-neck edge and the armhole edge.</p>
 <!-- TEXT NODE E1a — include when SaCaSIS_Node_E_result = "E1a" -->
-<!--SACASIS_IF SaCaSIS_Node_E_result == "E1a"-->
-<p>⚠ TODO: E1a — single RS decrease pair handling (YY=1).</p>
-<!--SACASIS_END-->
-
+<!--
+  <p>Decrease 1 st at armhole edge every RS row: at the beginning of the row k1, ssk, continue with pattern, <strong>{SaCaSIS_ZZ}</strong> times.</p>
+  <p>AT THE SAME TIME, decrease 1 st at neck edge every RS row: work to last 3 stitches, k2tog, k1.</p>
+  <p><strong>WS rows:</strong> work in pattern (cable crossings on rows 10, 20, 30… as established).</p>
+  <p>End with a WS row.</p>
+  <div class="stitch-box">
+    <span class="label">After simultaneous decreases</span>
+    Rows: <strong>{Rows_after_sim_dec_left}</strong>. Sts: <strong>{SaCaSIS_PP5}</strong>.
+  </div>
+  -->
 <!-- TEXT NODE F — include when SaCaSIS_Node_E_result = "E1a" AND SaCaSIS_Node_F_result = "YES" -->
-<!--SACASIS_IF SaCaSIS_Node_E_result == "E1a" AND SaCaSIS_Node_F_result == "YES"-->
-<p>⚠ TODO: F — post-armhole neck decreases when there are remaining pairs.</p>
-<!--SACASIS_END-->
-
+<!--
+  <p>Armhole shaping is already complete. Continue decreasing 1 st at neck edge every RS row: work in pattern to last 3 stitches, k2tog, k1, <strong>{SaCaSIS_Post_armhole_neck_pairs}</strong> times.</p>
+  <p><strong>WS:</strong> work in pattern.</p>
+  <p>The "when V-neck decreases reach a cable" rule above applies.</p>
+  <div class="stitch-box">
+    <span class="label">After neck-only decreases</span>
+    Rows: <strong>{Rows_after_neck_dec_left}</strong>. Sts: <strong>{Front_shoulder_sts_per_side}</strong>.
+  </div>
+  -->
 <!-- TEXT NODE E1b — include when SaCaSIS_Node_E_result = "E1b" -->
-<!--SACASIS_IF SaCaSIS_Node_E_result == "E1b"-->
-<p>⚠ TODO: E1b — multi-pair RS decreases. Render from {SaCaSIS_neck_rs_runs_zz} (ZZ window) and {SaCaSIS_neck_rs_runs_post} (post-window).</p>
-<!--SACASIS_END-->
-
+<!-- FORMATTER: Render two phases using "AT THE SAME TIME" convention.
+     Phase 1: armhole every RS row {SaCaSIS_ZZ} times; AT THE SAME TIME, neck decreases on specific RS
+     rows (formatter expands SaCaSIS_neck_rs_runs_zz into an explicit list, counting from division row
+     as row 1).
+     Phase 2: continue neck decreases on RS rows (formatter expands SaCaSIS_neck_rs_runs_post). -->
+<!--
+  <p><strong>Phase 1 — armhole + neck simultaneous.</strong></p>
+  <p>Decrease 1 st at armhole edge every RS row: at the beginning of the row k1, ssk, continue with pattern, <strong>{SaCaSIS_ZZ}</strong> times.</p>
+  <p>AT THE SAME TIME, decrease 1 st at neck edge on <strong>RS rows [formatter renders list from SaCaSIS_neck_rs_runs_zz]</strong> (counting from the division row as row 1): work to last 3 stitches, k2tog, k1.</p>
+  <div class="stitch-box">
+    <span class="label">After Phase 1 (armhole shaping complete)</span>
+    Rows: <strong>{Rows_after_sim_dec_left}</strong>. Sts: <strong>{SaCaSIS_PP5}</strong>.
+  </div>
+  <p><strong>Phase 2 — neck only.</strong></p>
+  <p>Continue decreasing 1 st at neck edge on <strong>RS rows [formatter renders list from SaCaSIS_neck_rs_runs_post]</strong>: work in pattern to last 3 stitches, k2tog, k1.</p>
+  <div class="stitch-box">
+    <span class="label">After Phase 2 (neck shaping complete)</span>
+    Rows: <strong>{Rows_after_neck_dec_left}</strong>. Sts: <strong>{Front_shoulder_sts_per_side}</strong>.
+  </div>
+  -->
 <!-- TEXT NODE E1_WS — include when SaCaSIS_Node_E_result = "E1_WS" -->
-<!--SACASIS_IF SaCaSIS_Node_E_result == "E1_WS"-->
-<p>⚠ TODO: E1_WS — WS decrease handling. Render from {SaCaSIS_neck_ws_runs_zz} and {SaCaSIS_neck_ws_runs_post}.</p>
-<!--SACASIS_END-->
-
+<!-- FORMATTER: Same structure as E1b but with WS neck decreases too.
+     Use SaCaSIS_neck_ws_runs_zz and SaCaSIS_neck_ws_runs_post; the row lists include both RS and WS rows.
+     LEFT FRONT decreases:
+       RS at neck edge: work to last 3 sts, k2tog, k1
+       WS at neck edge: p1, ssp, continue in pattern (decrease at the start of WS row). -->
+<!--
+  <p><strong>Phase 1 — armhole + neck simultaneous (armhole on RS only; neck on RS and WS).</strong></p>
+  <p>Decrease 1 st at armhole edge every RS row: at the beginning of the row k1, ssk, continue with pattern, <strong>{SaCaSIS_ZZ}</strong> times.</p>
+  <p>AT THE SAME TIME, decrease 1 st at neck edge on <strong>rows [formatter renders list of RS and WS rows from SaCaSIS_neck_ws_runs_zz]</strong> (counting from the division row as row 1): on RS rows, work to last 3 stitches, k2tog, k1; on WS rows, p1, ssp, continue in pattern.</p>
+  <p>WS rows without a scheduled neck decrease: work in pattern.</p>
+  <div class="stitch-box">
+    <span class="label">After Phase 1 (armhole shaping complete)</span>
+    Rows: <strong>{Rows_after_sim_dec_left}</strong>. Sts: <strong>{SaCaSIS_PP5}</strong>.
+  </div>
+  <p><strong>Phase 2 — neck only (RS and WS).</strong></p>
+  <p>Continue decreasing 1 st at neck edge on <strong>rows [formatter renders list from SaCaSIS_neck_ws_runs_post]</strong>: on RS rows, work in pattern to last 3 stitches, k2tog, k1; on WS rows, p1, ssp, continue in pattern.</p>
+  <div class="stitch-box">
+    <span class="label">After Phase 2 (neck shaping complete)</span>
+    Rows: <strong>{Rows_after_neck_dec_left}</strong>. Sts: <strong>{Front_shoulder_sts_per_side}</strong>.
+  </div>
+  -->
 <!-- TEXT NODE G — include when SaCaSIS_Node_G_result = "YES" -->
-<!--SACASIS_IF SaCaSIS_Node_G_result == "YES"-->
-<p>⚠ TODO: G — extra rows worked even after shaping completes.</p>
-<!--SACASIS_END-->
-
+<!--
+  <div class="instr"><strong>RS:</strong> Work in pattern (any remaining cable + stockinette flank as established).</div>
+  <div class="instr"><strong>WS:</strong> Work in pattern.</div>
+  <p>Continue until piece measures <strong>{Length_to_shoulder} cm</strong> from cast-on edge. End after a WS row.</p>
+  -->
 <!-- TEXT NODE H — always included -->
-<p>⚠ TODO: H — shoulder bind-off summary, left front.</p>
+<p>Bind off <strong>{Bindoff_group_1}</strong> sts at the beginning of the next RS row, work 1 WS row. Bind off <strong>{Bindoff_group_2}</strong> sts at the beginning of the next RS row, work 1 WS row. Bind off the remaining sts at the beginning of the next RS row.</p>
+<div class="stitch-box">
+<span class="label">Left front complete</span>
+    Rows: <strong>{Rows_left_front_complete}</strong>. All shoulder sts bound off.
+  </div>
+
+
+<!-- ════════════════════════════════════════
+     PAGE 6 — FRONT: RIGHT SIDE (SaCaSIS variant)
+════════════════════════════════════════ -->
+
 
 <h2 class="subsection">Right Front</h2>
-<!-- TODO: Mirror image of left front. Same conditional blocks but with opposite-side decreases (k2tog where left used ssk, and vice versa). -->
-<p>⚠ TODO: Right front instructions, mirroring left.</p>
+<p>Transfer the held right front stitches back to the needle. There are <strong>{SaCaSIS_PP2}</strong> stitches. Leave the centre stitch on its holder for now — it will be picked up when working the neckband. Join yarn at the neck edge, ready to work a RS row.</p>
+<div class="instr"><strong>RS:</strong> Work in pattern to last 3 sts, k2tog, k1.</div>
+<div class="instr"><strong>WS:</strong> Work in pattern.</div>
+<div class="stitch-box">
+<span class="label">After first RS row</span>
+    Rows: <strong>{Rows_right_first_rs}</strong>. Live sts right front: <strong>{SaCaSIS_PP3}</strong>.
+  </div>
+<!-- TEXT NODE E1a right front — include when SaCaSIS_Node_E_result = "E1a" -->
+<!--
+  <p>Decrease 1 st at neck edge every RS row: at the beginning of the row k1, ssk, continue in pattern, <strong>{SaCaSIS_ZZ}</strong> times.</p>
+  <p>AT THE SAME TIME, decrease 1 st at armhole edge every RS row: work to last 3 stitches, k2tog, k1.</p>
+  <p><strong>WS rows:</strong> work in pattern (cable crossings as established).</p>
+  <p>End with a WS row.</p>
+  <div class="stitch-box">
+    <span class="label">After simultaneous decreases</span>
+    Rows: <strong>{Rows_after_sim_dec_right}</strong>. Sts: <strong>{SaCaSIS_PP5}</strong>.
+  </div>
+  -->
+<!-- TEXT NODE F right front — include when SaCaSIS_Node_E_result = "E1a" AND SaCaSIS_Node_F_result = "YES" -->
+<!--
+  <p>Armhole shaping is already complete. Continue decreasing 1 st at neck edge every RS row: at the beginning of the row k1, ssk, continue in pattern, <strong>{SaCaSIS_Post_armhole_neck_pairs}</strong> times.</p>
+  <p><strong>WS:</strong> work in pattern.</p>
+  <p>The "when V-neck decreases reach a cable" rule above applies.</p>
+  <div class="stitch-box">
+    <span class="label">After neck-only decreases</span>
+    Rows: <strong>{Rows_after_neck_dec_right}</strong>. Sts: <strong>{Front_shoulder_sts_per_side}</strong>.
+  </div>
+  -->
+<!-- TEXT NODE E1b right front — include when SaCaSIS_Node_E_result = "E1b" -->
+<!-- FORMATTER: Mirror of E1b left front. ssk now sits at start of RS = neck side;
+     k2tog now sits at end of RS = armhole side.
+     Use SaCaSIS_neck_rs_runs_zz and SaCaSIS_neck_rs_runs_post for the row lists. -->
+<!--
+  <p><strong>Phase 1 — armhole + neck simultaneous.</strong></p>
+  <p>Decrease 1 st at armhole edge every RS row: work to last 3 stitches, k2tog, k1, <strong>{SaCaSIS_ZZ}</strong> times.</p>
+  <p>AT THE SAME TIME, decrease 1 st at neck edge on <strong>RS rows [formatter renders list from SaCaSIS_neck_rs_runs_zz]</strong>: at the beginning of the row k1, ssk, continue in pattern.</p>
+  <div class="stitch-box">
+    <span class="label">After Phase 1 (armhole shaping complete)</span>
+    Rows: <strong>{Rows_after_sim_dec_right}</strong>. Sts: <strong>{SaCaSIS_PP5}</strong>.
+  </div>
+  <p><strong>Phase 2 — neck only.</strong></p>
+  <p>Continue decreasing 1 st at neck edge on <strong>RS rows [formatter renders list from SaCaSIS_neck_rs_runs_post]</strong>: at the beginning of the row k1, ssk, continue in pattern.</p>
+  <div class="stitch-box">
+    <span class="label">After Phase 2 (neck shaping complete)</span>
+    Rows: <strong>{Rows_after_neck_dec_right}</strong>. Sts: <strong>{Front_shoulder_sts_per_side}</strong>.
+  </div>
+  -->
+<!-- TEXT NODE E1_WS right front — include when SaCaSIS_Node_E_result = "E1_WS" -->
+<!-- FORMATTER: Mirror of E1_WS left front.
+     RIGHT FRONT decreases:
+       RS at neck edge: at the beginning, k1, ssk, continue in pattern
+       WS at neck edge: work to last 3 sts, p2tog, p1 (decrease at the end of WS row).
+     Use SaCaSIS_neck_ws_runs_zz and SaCaSIS_neck_ws_runs_post. -->
+<!--
+  <p><strong>Phase 1 — armhole + neck simultaneous (armhole on RS only; neck on RS and WS).</strong></p>
+  <p>Decrease 1 st at armhole edge every RS row: work to last 3 stitches, k2tog, k1, <strong>{SaCaSIS_ZZ}</strong> times.</p>
+  <p>AT THE SAME TIME, decrease 1 st at neck edge on <strong>rows [formatter renders list of RS and WS rows from SaCaSIS_neck_ws_runs_zz]</strong>: on RS rows, at the beginning of the row k1, ssk, continue in pattern; on WS rows, work to last 3 stitches, p2tog, p1.</p>
+  <p>WS rows without a scheduled neck decrease: work in pattern.</p>
+  <div class="stitch-box">
+    <span class="label">After Phase 1 (armhole shaping complete)</span>
+    Rows: <strong>{Rows_after_sim_dec_right}</strong>. Sts: <strong>{SaCaSIS_PP5}</strong>.
+  </div>
+  <p><strong>Phase 2 — neck only (RS and WS).</strong></p>
+  <p>Continue decreasing 1 st at neck edge on <strong>rows [formatter renders list from SaCaSIS_neck_ws_runs_post]</strong>: on RS rows, at the beginning of the row k1, ssk, continue in pattern; on WS rows, work to last 3 stitches, p2tog, p1.</p>
+  <div class="stitch-box">
+    <span class="label">After Phase 2 (neck shaping complete)</span>
+    Rows: <strong>{Rows_after_neck_dec_right}</strong>. Sts: <strong>{Front_shoulder_sts_per_side}</strong>.
+  </div>
+  -->
+<!-- TEXT NODE G right front — include when SaCaSIS_Node_G_result = "YES" -->
+<!--
+  <div class="instr"><strong>RS:</strong> Work in pattern.</div>
+  <div class="instr"><strong>WS:</strong> Work in pattern.</div>
+  <p>Continue until piece measures <strong>{Length_to_shoulder} cm</strong> from cast-on edge. End after a WS row.</p>
+  -->
+<!-- TEXT NODE H right front — always included -->
+<p>Bind off <strong>{Bindoff_group_1}</strong> sts at the beginning of the next RS row, work 1 WS row. Bind off <strong>{Bindoff_group_2}</strong> sts at the beginning of the next RS row, work 1 WS row. Bind off the remaining sts at the beginning of the next RS row.</p>
+<div class="stitch-box">
+<span class="label">Right front complete</span>
+    Rows: <strong>{Rows_right_front_complete}</strong>. All shoulder sts bound off.
+  </div>
