@@ -27,6 +27,8 @@ interface SisPayload {
   Front_neck_depth_for_V_cm: number;
   Sleeve_length_cm: number;
   construction_method?: string;
+  special_details?: string;
+  Variant?: string;
 }
 
 interface TallyWebhookPayload {
@@ -629,6 +631,11 @@ export const tallyWebhookTask = task({
     });
 
     const isTdcr = fields.construction_method === 'knitted in one piece, from the top down (seamless)';
+    const isSacasis = !isTdcr && fields.special_details === 'sand cables in front';
+
+    if (isSacasis) {
+      fields.Variant = 'sacasis';
+    }
 
     if (isTdcr) {
       const handle = await tdcrPipelineTask.trigger(fields);
@@ -700,6 +707,7 @@ function extractTallyFields(payload: TallyWebhookPayload): any {
       "Front_neck_depth_for_V_cm": "Front_neck_depth_for_V_cm",
       "Sleeve_length_cm": "Sleeve_length_cm",
       "Construction_method": "construction_method",
+      "Special details": "special_details",
     };
 
     const numericFields = new Set([
