@@ -631,7 +631,7 @@ export const tallyWebhookTask = task({
     });
 
     const isTdcr = fields.construction_method === 'knitted in one piece, from the top down (seamless)';
-    const isSacasis = !isTdcr && fields.special_details === 'sand cables in front';
+    const isSacasis = !isTdcr && typeof fields.special_details === 'string' && fields.special_details.includes('sand cable');
 
     if (isSacasis) {
       fields.Variant = 'sacasis';
