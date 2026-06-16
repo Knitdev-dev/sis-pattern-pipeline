@@ -1254,7 +1254,14 @@ async function callWorker(url: string, apiKey: string, body: object) {
     const text = await response.text();
 
     if (!response.ok) {
-      return { error: `HTTP ${response.status}: ${text.slice(0, 500)}` };
+      // Try to parse JSON even on error responses — the calculator returns
+      // structured { error, incompatibility } on HTTP 422 user-input errors.
+      try {
+        const data = JSON.parse(text);
+        return { error: data.error || `HTTP ${response.status}`, data };
+      } catch {
+        return { error: `HTTP ${response.status}: ${text.slice(0, 500)}` };
+      }
     }
 
     try {
