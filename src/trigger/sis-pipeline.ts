@@ -66,6 +66,42 @@ export const sisPipelineTask = task({
       runId: ctx.run.id,
     });
 
+    // ── Pre-flight: gauge sanity check ────────────────────────────
+    // If row gauge is suspiciously low relative to stitch gauge, the
+    // customer has likely swapped sts and rows. Fire a friendly email
+    // and exit before consuming a calculator attempt.
+    const gaugeRatio = payload.Gauge_row / payload.Gauge_st;
+    if (gaugeRatio < 0.75) {
+      if (payload.email) {
+        await resend.emails.send({
+          from: fromEmail,
+          to: [payload.email],
+          subject: "Pattern generation failed — please check your gauge",
+          html: `
+            <p>Hi,</p>
+            <p>We were unable to generate your pattern because your gauge looks unusual: you entered <strong>${payload.Gauge_st} stitches</strong> and <strong>${payload.Gauge_row} rows</strong> per 10 cm.</p>
+            <p>For most knitting, row gauge is higher than stitch gauge (e.g. 20 sts × 28 rows). It looks like your stitch and row gauge may have been entered the wrong way round.</p>
+            <p>Please re-measure your swatch and re-submit. If you're not sure how to measure, count the <strong>stitches across</strong> your swatch for stitch gauge, and the <strong>rows up</strong> for row gauge.</p>
+            <p>We have not charged you for this submission.</p>
+            <p><a href="${process.env.TALLY_FORM_URL || appUrl}">Re-submit your measurements →</a></p>
+            <p>If you have any questions, simply reply to this email.</p>
+          `,
+        });
+        logger.log("Gauge-sanity resubmit email sent to customer", { to: payload.email });
+      }
+      await resend.emails.send({
+        from: fromEmail,
+        to: [adminEmail],
+        subject: `ℹ️ SIS pre-flight — gauge looks swapped — ${payload.email || "no email"}`,
+        html: `
+          <p>Customer likely swapped stitch/row gauge. Friendly resubmit email sent.</p>
+          <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st} sts / ${payload.Gauge_row} rows · ratio ${gaugeRatio.toFixed(2)}</p>
+          <p><strong>Run ID:</strong> ${ctx.run.id}</p>
+        `,
+      });
+      return { status: "user_input_error", reason: "gauge_possibly_swapped" };
+    }
+
     // ── Steps 1 & 2: Calculator + Validator (with retry) ──────────
     let calcJson: any;
     let validation: any;
@@ -122,6 +158,22 @@ export const sisPipelineTask = task({
         // help. Send a clear admin alert and exit cleanly. Customer
         // gets nothing automated; admin emails them manually.
         if (incompatibility === "v_neck_too_deep_for_fit" || incompatibility === "sleeve_too_short") {
+          if (incompatibility === "sleeve_too_short" && payload.email) {
+            await resend.emails.send({
+              from: fromEmail,
+              to: [payload.email],
+              subject: "Pattern generation failed — sleeve length too short for your size",
+              html: `
+                <p>Hi,</p>
+                <p>Unfortunately we were unable to generate your pattern. Your sleeve length of <strong>${payload.Sleeve_length_cm} cm</strong> is too short for your size at this gauge: the sleeve increases would need to be worked every other row or faster, which produces an unwearably steep taper.</p>
+                <p>Please re-submit with a longer sleeve length. A typical sleeve length for your size is <strong>58–65 cm</strong>.</p>
+                <p>We have not charged you for this submission.</p>
+                <p><a href="${process.env.TALLY_FORM_URL || appUrl}">Re-submit your measurements →</a></p>
+                <p>If you have any questions, simply reply to this email.</p>
+              `,
+            });
+            logger.log("Sleeve-too-short resubmit email sent to customer", { to: payload.email });
+          }
           await resend.emails.send({
             from: fromEmail,
             to: [adminEmail],
@@ -382,6 +434,39 @@ export const sisCardiganPipelineTask = task({
       runId: ctx.run.id,
     });
 
+    // ── Pre-flight: gauge sanity check ────────────────────────────
+    const gaugeRatio = payload.Gauge_row / payload.Gauge_st;
+    if (gaugeRatio < 0.75) {
+      if (payload.email) {
+        await resend.emails.send({
+          from: fromEmail,
+          to: [payload.email],
+          subject: "Pattern generation failed — please check your gauge",
+          html: `
+            <p>Hi,</p>
+            <p>We were unable to generate your pattern because your gauge looks unusual: you entered <strong>${payload.Gauge_st} stitches</strong> and <strong>${payload.Gauge_row} rows</strong> per 10 cm.</p>
+            <p>For most knitting, row gauge is higher than stitch gauge (e.g. 20 sts × 28 rows). It looks like your stitch and row gauge may have been entered the wrong way round.</p>
+            <p>Please re-measure your swatch and re-submit. If you're not sure how to measure, count the <strong>stitches across</strong> your swatch for stitch gauge, and the <strong>rows up</strong> for row gauge.</p>
+            <p>We have not charged you for this submission.</p>
+            <p><a href="${process.env.TALLY_FORM_URL || appUrl}">Re-submit your measurements →</a></p>
+            <p>If you have any questions, simply reply to this email.</p>
+          `,
+        });
+        logger.log("Gauge-sanity resubmit email sent to customer", { to: payload.email });
+      }
+      await resend.emails.send({
+        from: fromEmail,
+        to: [adminEmail],
+        subject: `ℹ️ Cardigan pre-flight — gauge looks swapped — ${payload.email || "no email"}`,
+        html: `
+          <p>Customer likely swapped stitch/row gauge. Friendly resubmit email sent.</p>
+          <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st} sts / ${payload.Gauge_row} rows · ratio ${gaugeRatio.toFixed(2)}</p>
+          <p><strong>Run ID:</strong> ${ctx.run.id}</p>
+        `,
+      });
+      return { status: "user_input_error", reason: "gauge_possibly_swapped" };
+    }
+
     // ── Steps 1 & 2: Calculator + Validator (with retry) ──────────
     let calcJson: any;
     let validation: any;
@@ -462,6 +547,36 @@ export const sisCardiganPipelineTask = task({
 
         // ── Developer-only alerts: flag to admin, no customer email ──
         if (incompatibility === "v_neck_too_deep_for_fit" || incompatibility === "sleeve_too_short" || incompatibility === "cardigan_band_too_narrow") {
+          if (incompatibility === "sleeve_too_short" && payload.email) {
+            await resend.emails.send({
+              from: fromEmail,
+              to: [payload.email],
+              subject: "Pattern generation failed — sleeve length too short for your size",
+              html: `
+                <p>Hi,</p>
+                <p>Unfortunately we were unable to generate your pattern. Your sleeve length of <strong>${payload.Sleeve_length_cm} cm</strong> is too short for your size at this gauge: the sleeve increases would need to be worked every other row or faster, which produces an unwearably steep taper.</p>
+                <p>Please re-submit with a longer sleeve length. A typical sleeve length for your size is <strong>58–65 cm</strong>.</p>
+                <p>We have not charged you for this submission.</p>
+                <p><a href="${process.env.TALLY_FORM_URL || appUrl}">Re-submit your measurements →</a></p>
+                <p>If you have any questions, simply reply to this email.</p>
+              `,
+            });
+            logger.log("Sleeve-too-short resubmit email sent to customer", { to: payload.email });
+          }
+          if (incompatibility === "cardigan_band_too_narrow" && payload.email) {
+            await resend.emails.send({
+              from: fromEmail,
+              to: [payload.email],
+              subject: "Pattern generation failed — cardigan band too narrow for your gauge",
+              html: `
+                <p>Hi,</p>
+                <p>Unfortunately we were unable to generate your pattern. Your gauge of <strong>${payload.Gauge_st} sts per 10 cm</strong> produces a front band that is too narrow to accommodate the buttonholes.</p>
+                <p>This usually happens with a very fine gauge. Please <a href="${process.env.TALLY_FORM_URL || appUrl}">contact us</a> and we'll help you find the best solution for your yarn.</p>
+                <p>We have not charged you for this submission.</p>
+              `,
+            });
+            logger.log("Band-too-narrow resubmit email sent to customer", { to: payload.email });
+          }
           await resend.emails.send({
             from: fromEmail,
             to: [adminEmail],
