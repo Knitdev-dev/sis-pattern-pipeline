@@ -1,4 +1,4 @@
-import { task, logger, wait } from "@trigger.dev/sdk";
+import { task, logger } from "@trigger.dev/sdk";
 import { Resend } from "resend";
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -66,42 +66,6 @@ export const sisPipelineTask = task({
       runId: ctx.run.id,
     });
 
-    // ── Pre-flight: gauge sanity check ────────────────────────────
-    // If row gauge is suspiciously low relative to stitch gauge, the
-    // customer has likely swapped sts and rows. Fire a friendly email
-    // and exit before consuming a calculator attempt.
-    const gaugeRatio = payload.Gauge_row / payload.Gauge_st;
-    if (gaugeRatio < 0.75) {
-      if (payload.email) {
-        await resend.emails.send({
-          from: fromEmail,
-          to: [payload.email],
-          subject: "Pattern generation failed — please check your gauge",
-          html: `
-            <p>Hi,</p>
-            <p>We were unable to generate your pattern because your gauge looks unusual: you entered <strong>${payload.Gauge_st} stitches</strong> and <strong>${payload.Gauge_row} rows</strong> per 10 cm.</p>
-            <p>For most knitting, row gauge is higher than stitch gauge (e.g. 20 sts × 28 rows). It looks like your stitch and row gauge may have been entered the wrong way round.</p>
-            <p>Please re-measure your swatch and re-submit. If you're not sure how to measure, count the <strong>stitches across</strong> your swatch for stitch gauge, and the <strong>rows up</strong> for row gauge.</p>
-            <p>We have not charged you for this submission.</p>
-            <p><a href="${process.env.TALLY_FORM_URL || appUrl}">Re-submit your measurements →</a></p>
-            <p>If you have any questions, simply reply to this email.</p>
-          `,
-        });
-        logger.log("Gauge-sanity resubmit email sent to customer", { to: payload.email });
-      }
-      await resend.emails.send({
-        from: fromEmail,
-        to: [adminEmail],
-        subject: `ℹ️ SIS pre-flight — gauge looks swapped — ${payload.email || "no email"}`,
-        html: `
-          <p>Customer likely swapped stitch/row gauge. Friendly resubmit email sent.</p>
-          <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st} sts / ${payload.Gauge_row} rows · ratio ${gaugeRatio.toFixed(2)}</p>
-          <p><strong>Run ID:</strong> ${ctx.run.id}</p>
-        `,
-      });
-      return { status: "user_input_error", reason: "gauge_possibly_swapped" };
-    }
-
     // ── Steps 1 & 2: Calculator + Validator (with retry) ──────────
     let calcJson: any;
     let validation: any;
@@ -158,22 +122,6 @@ export const sisPipelineTask = task({
         // help. Send a clear admin alert and exit cleanly. Customer
         // gets nothing automated; admin emails them manually.
         if (incompatibility === "v_neck_too_deep_for_fit" || incompatibility === "sleeve_too_short") {
-          if (incompatibility === "sleeve_too_short" && payload.email) {
-            await resend.emails.send({
-              from: fromEmail,
-              to: [payload.email],
-              subject: "Pattern generation failed — sleeve length too short for your size",
-              html: `
-                <p>Hi,</p>
-                <p>Unfortunately we were unable to generate your pattern. Your sleeve length of <strong>${payload.Sleeve_length_cm} cm</strong> is too short for your size at this gauge: the sleeve increases would need to be worked every other row or faster, which produces an unwearably steep taper.</p>
-                <p>Please re-submit with a longer sleeve length. A typical sleeve length for your size is <strong>58–65 cm</strong>.</p>
-                <p>We have not charged you for this submission.</p>
-                <p><a href="${process.env.TALLY_FORM_URL || appUrl}">Re-submit your measurements →</a></p>
-                <p>If you have any questions, simply reply to this email.</p>
-              `,
-            });
-            logger.log("Sleeve-too-short resubmit email sent to customer", { to: payload.email });
-          }
           await resend.emails.send({
             from: fromEmail,
             to: [adminEmail],
@@ -294,70 +242,7 @@ export const sisPipelineTask = task({
     const pdfBuffer = await htmlToPdf(patternHtml);
     logger.log("PDF generated", { bytes: pdfBuffer.byteLength });
 
-    // ── Step 6: Admin approval gate ───────────────────────────────
-    logger.log("Sending admin preview for approval...");
-
-    const token = await wait.createToken({
-      timeout: "48h",
-    });
-
-    const approveUrl = `${appUrl}/approve?tokenId=${token.id}&action=approve`;
-    const rejectUrl  = `${appUrl}/approve?tokenId=${token.id}&action=reject`;
-
     const pdfBase64 = bufferToBase64(pdfBuffer);
-
-    await resend.emails.send({
-      from: fromEmail,
-      to: [adminEmail],
-      subject: `⏳ REVIEW NEEDED — SIS Pattern — ${payload.email || "no email"} — Bust ${payload.Bust_cm}cm`,
-      html: `
-        <h2>Pattern ready for review</h2>
-        <p>A new pattern has been generated. Please review the attached PDF before it is sent to the customer.</p>
-        <p><strong>Customer:</strong> ${payload.email || "no email"}</p>
-        <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row · ${payload.Ease_preference} · ${payload.Length_preference}</p>
-        <p><strong>Nodes active:</strong> ${JSON.stringify(calcJson.decision_path?.nodes_active)}</p>
-        <p><strong>Validation warnings:</strong> ${JSON.stringify(validation.warnings || [])}</p>
-        <hr>
-        <p>
-          <a href="${approveUrl}" style="background:#22c55e;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold;margin-right:12px">
-            ✅ Approve — Send to customer
-          </a>
-          <a href="${rejectUrl}" style="background:#ef4444;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold">
-            ❌ Reject — Do not send
-          </a>
-        </p>
-        <hr>
-        <h3>Calculation Log</h3>
-        <pre style="font-size:11px;background:#f5f5f5;padding:12px">${calcLog || "not generated"}</pre>
-      `,
-      attachments: [
-        {
-          filename: `pattern-${payload.Bust_cm}cm.pdf`,
-          content: pdfBase64,
-        },
-      ],
-    });
-
-    // ── Step 7: Wait for admin approval (up to 48 hours) ──────────
-    logger.log("Waiting for admin approval...");
-    const approvalResult = await wait.forToken<{ action: string }>(token.id);
-
-    logger.log("Approval result", { result: JSON.stringify(approvalResult) });
-
-    const output = approvalResult.ok ? (approvalResult.output as any) : null;
-    const action = output?.data?.action || output?.action;
-    if (action !== "approve") {
-      logger.log("Pattern rejected or timed out — not sending to customer");
-      await resend.emails.send({
-        from: fromEmail,
-        to: [adminEmail],
-        subject: `❌ Pattern NOT sent — ${payload.email || "no email"} — Bust ${payload.Bust_cm}cm`,
-        html: `<p>The pattern was <strong>rejected</strong> (or approval timed out) and was <strong>not</strong> sent to the customer.</p>`,
-      });
-      return { status: "rejected", runId: ctx.run.id };
-    }
-
-    logger.log("Pattern approved — sending to customer...");
 
     // ── Step 8: Send pattern PDF to customer ──────────────────────
     if (payload.email) {
@@ -433,39 +318,6 @@ export const sisCardiganPipelineTask = task({
       email: payload.email,
       runId: ctx.run.id,
     });
-
-    // ── Pre-flight: gauge sanity check ────────────────────────────
-    const gaugeRatio = payload.Gauge_row / payload.Gauge_st;
-    if (gaugeRatio < 0.75) {
-      if (payload.email) {
-        await resend.emails.send({
-          from: fromEmail,
-          to: [payload.email],
-          subject: "Pattern generation failed — please check your gauge",
-          html: `
-            <p>Hi,</p>
-            <p>We were unable to generate your pattern because your gauge looks unusual: you entered <strong>${payload.Gauge_st} stitches</strong> and <strong>${payload.Gauge_row} rows</strong> per 10 cm.</p>
-            <p>For most knitting, row gauge is higher than stitch gauge (e.g. 20 sts × 28 rows). It looks like your stitch and row gauge may have been entered the wrong way round.</p>
-            <p>Please re-measure your swatch and re-submit. If you're not sure how to measure, count the <strong>stitches across</strong> your swatch for stitch gauge, and the <strong>rows up</strong> for row gauge.</p>
-            <p>We have not charged you for this submission.</p>
-            <p><a href="${process.env.TALLY_FORM_URL || appUrl}">Re-submit your measurements →</a></p>
-            <p>If you have any questions, simply reply to this email.</p>
-          `,
-        });
-        logger.log("Gauge-sanity resubmit email sent to customer", { to: payload.email });
-      }
-      await resend.emails.send({
-        from: fromEmail,
-        to: [adminEmail],
-        subject: `ℹ️ Cardigan pre-flight — gauge looks swapped — ${payload.email || "no email"}`,
-        html: `
-          <p>Customer likely swapped stitch/row gauge. Friendly resubmit email sent.</p>
-          <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st} sts / ${payload.Gauge_row} rows · ratio ${gaugeRatio.toFixed(2)}</p>
-          <p><strong>Run ID:</strong> ${ctx.run.id}</p>
-        `,
-      });
-      return { status: "user_input_error", reason: "gauge_possibly_swapped" };
-    }
 
     // ── Steps 1 & 2: Calculator + Validator (with retry) ──────────
     let calcJson: any;
@@ -547,36 +399,6 @@ export const sisCardiganPipelineTask = task({
 
         // ── Developer-only alerts: flag to admin, no customer email ──
         if (incompatibility === "v_neck_too_deep_for_fit" || incompatibility === "sleeve_too_short" || incompatibility === "cardigan_band_too_narrow") {
-          if (incompatibility === "sleeve_too_short" && payload.email) {
-            await resend.emails.send({
-              from: fromEmail,
-              to: [payload.email],
-              subject: "Pattern generation failed — sleeve length too short for your size",
-              html: `
-                <p>Hi,</p>
-                <p>Unfortunately we were unable to generate your pattern. Your sleeve length of <strong>${payload.Sleeve_length_cm} cm</strong> is too short for your size at this gauge: the sleeve increases would need to be worked every other row or faster, which produces an unwearably steep taper.</p>
-                <p>Please re-submit with a longer sleeve length. A typical sleeve length for your size is <strong>58–65 cm</strong>.</p>
-                <p>We have not charged you for this submission.</p>
-                <p><a href="${process.env.TALLY_FORM_URL || appUrl}">Re-submit your measurements →</a></p>
-                <p>If you have any questions, simply reply to this email.</p>
-              `,
-            });
-            logger.log("Sleeve-too-short resubmit email sent to customer", { to: payload.email });
-          }
-          if (incompatibility === "cardigan_band_too_narrow" && payload.email) {
-            await resend.emails.send({
-              from: fromEmail,
-              to: [payload.email],
-              subject: "Pattern generation failed — cardigan band too narrow for your gauge",
-              html: `
-                <p>Hi,</p>
-                <p>Unfortunately we were unable to generate your pattern. Your gauge of <strong>${payload.Gauge_st} sts per 10 cm</strong> produces a front band that is too narrow to accommodate the buttonholes.</p>
-                <p>This usually happens with a very fine gauge. Please <a href="${process.env.TALLY_FORM_URL || appUrl}">contact us</a> and we'll help you find the best solution for your yarn.</p>
-                <p>We have not charged you for this submission.</p>
-              `,
-            });
-            logger.log("Band-too-narrow resubmit email sent to customer", { to: payload.email });
-          }
           await resend.emails.send({
             from: fromEmail,
             to: [adminEmail],
@@ -702,75 +524,7 @@ export const sisCardiganPipelineTask = task({
     const pdfBuffer = await htmlToPdf(patternHtml);
     logger.log("Cardigan PDF generated", { bytes: pdfBuffer.byteLength });
 
-    // ── Step 6: Admin approval gate ───────────────────────────────
-    logger.log("Sending cardigan admin preview for approval...");
-
-    const token = await wait.createToken({
-      timeout: "48h",
-    });
-
-    const approveUrl = `${appUrl}/approve?tokenId=${token.id}&action=approve`;
-    const rejectUrl  = `${appUrl}/approve?tokenId=${token.id}&action=reject`;
-
     const pdfBase64 = bufferToBase64(pdfBuffer);
-
-    await resend.emails.send({
-      from: fromEmail,
-      to: [adminEmail],
-      subject: `⏳ REVIEW NEEDED — Cardigan Pattern — ${payload.email || "no email"} — Bust ${payload.Bust_cm}cm`,
-      html: `
-        <h2>Cardigan Pattern ready for review</h2>
-        <p>A new V-neck cardigan pattern has been generated. Please review the attached PDF before it is sent to the customer.</p>
-        <p><strong>Customer:</strong> ${payload.email || "no email"}</p>
-        <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row · ${payload.Ease_preference} · ${payload.Length_preference}</p>
-        <p><strong>Nodes active:</strong> ${JSON.stringify(calcJson.decision_path?.nodes_active)}</p>
-        <p><strong>Cardigan info:</strong> ${JSON.stringify({
-          front_sts: calcJson.cardigan?.Cardigan_front_sts,
-          band_sts: calcJson.cardigan?.Front_band_sts_total,
-          buttons: calcJson.cardigan?.Button_count,
-        })}</p>
-        <p><strong>Validation warnings:</strong> ${JSON.stringify(validation.warnings || [])}</p>
-        <hr>
-        <p>
-          <a href="${approveUrl}" style="background:#22c55e;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold;margin-right:12px">
-            ✅ Approve — Send to customer
-          </a>
-          <a href="${rejectUrl}" style="background:#ef4444;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold">
-            ❌ Reject — Do not send
-          </a>
-        </p>
-        <hr>
-        <h3>Calculation Log</h3>
-        <pre style="font-size:11px;background:#f5f5f5;padding:12px">${calcLog || "not generated"}</pre>
-      `,
-      attachments: [
-        {
-          filename: `cardigan-pattern-${payload.Bust_cm}cm.pdf`,
-          content: pdfBase64,
-        },
-      ],
-    });
-
-    // ── Step 7: Wait for admin approval (up to 48 hours) ──────────
-    logger.log("Waiting for cardigan admin approval...");
-    const approvalResult = await wait.forToken<{ action: string }>(token.id);
-
-    logger.log("Cardigan Approval result", { result: JSON.stringify(approvalResult) });
-
-    const output = approvalResult.ok ? (approvalResult.output as any) : null;
-    const action = output?.data?.action || output?.action;
-    if (action !== "approve") {
-      logger.log("Cardigan Pattern rejected or timed out — not sending to customer");
-      await resend.emails.send({
-        from: fromEmail,
-        to: [adminEmail],
-        subject: `❌ Cardigan Pattern NOT sent — ${payload.email || "no email"} — Bust ${payload.Bust_cm}cm`,
-        html: `<p>The cardigan pattern was <strong>rejected</strong> (or approval timed out) and was <strong>not</strong> sent to the customer.</p>`,
-      });
-      return { status: "rejected", runId: ctx.run.id };
-    }
-
-    logger.log("Cardigan Pattern approved — sending to customer...");
 
     // ── Step 8: Send pattern PDF to customer ──────────────────────
     if (payload.email) {
@@ -968,70 +722,7 @@ export const tdcrPipelineTask = task({
     const pdfBuffer = await htmlToPdf(patternHtml);
     logger.log("TDCR PDF generated", { bytes: pdfBuffer.byteLength });
 
-    // ── Step 6: Admin approval gate ───────────────────────────────
-    logger.log("Sending TDCR admin preview for approval...");
-
-    const token = await wait.createToken({
-      timeout: "48h",
-    });
-
-    const approveUrl = `${appUrl}/approve?tokenId=${token.id}&action=approve`;
-    const rejectUrl  = `${appUrl}/approve?tokenId=${token.id}&action=reject`;
-
     const pdfBase64 = bufferToBase64(pdfBuffer);
-
-    await resend.emails.send({
-      from: fromEmail,
-      to: [adminEmail],
-      subject: `⏳ REVIEW NEEDED — TDCR Pattern — ${payload.email || "no email"} — Bust ${payload.Bust_cm}cm`,
-      html: `
-        <h2>TDCR Pattern ready for review</h2>
-        <p>A new top-down circle raglan pattern has been generated. Please review the attached PDF before it is sent to the customer.</p>
-        <p><strong>Customer:</strong> ${payload.email || "no email"}</p>
-        <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row · ${payload.Ease_preference} · ${payload.Length_preference}</p>
-        <p><strong>Calculator checks:</strong> ${JSON.stringify(calcJson.checks)}</p>
-        <p><strong>Validation warnings:</strong> ${JSON.stringify(validation.warnings || [])}</p>
-        <hr>
-        <p>
-          <a href="${approveUrl}" style="background:#22c55e;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold;margin-right:12px">
-            ✅ Approve — Send to customer
-          </a>
-          <a href="${rejectUrl}" style="background:#ef4444;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold">
-            ❌ Reject — Do not send
-          </a>
-        </p>
-        <hr>
-        <h3>Calculation Log</h3>
-        <pre style="font-size:11px;background:#f5f5f5;padding:12px">${calcLog || "not generated"}</pre>
-      `,
-      attachments: [
-        {
-          filename: `tdcr-pattern-${payload.Bust_cm}cm.pdf`,
-          content: pdfBase64,
-        },
-      ],
-    });
-
-    // ── Step 7: Wait for admin approval (up to 48 hours) ──────────
-    logger.log("Waiting for TDCR admin approval...");
-    const approvalResult = await wait.forToken<{ action: string }>(token.id);
-
-    logger.log("TDCR Approval result", { result: JSON.stringify(approvalResult) });
-
-    const output = approvalResult.ok ? (approvalResult.output as any) : null;
-    const action = output?.data?.action || output?.action;
-    if (action !== "approve") {
-      logger.log("TDCR Pattern rejected or timed out — not sending to customer");
-      await resend.emails.send({
-        from: fromEmail,
-        to: [adminEmail],
-        subject: `❌ TDCR Pattern NOT sent — ${payload.email || "no email"} — Bust ${payload.Bust_cm}cm`,
-        html: `<p>The TDCR pattern was <strong>rejected</strong> (or approval timed out) and was <strong>not</strong> sent to the customer.</p>`,
-      });
-      return { status: "rejected", runId: ctx.run.id };
-    }
-
-    logger.log("TDCR Pattern approved — sending to customer...");
 
     // ── Step 8: Send pattern PDF to customer ──────────────────────
     if (payload.email) {
@@ -1254,14 +945,7 @@ async function callWorker(url: string, apiKey: string, body: object) {
     const text = await response.text();
 
     if (!response.ok) {
-      // Try to parse JSON even on error responses — the calculator returns
-      // structured { error, incompatibility } on HTTP 422 user-input errors.
-      try {
-        const data = JSON.parse(text);
-        return { error: data.error || `HTTP ${response.status}`, data };
-      } catch {
-        return { error: `HTTP ${response.status}: ${text.slice(0, 500)}` };
-      }
+      return { error: `HTTP ${response.status}: ${text.slice(0, 500)}` };
     }
 
     try {
