@@ -239,7 +239,13 @@ export const sisPipelineTask = task({
 
     // ── Step 5: Convert pattern HTML → PDF ────────────────────────
     logger.log("Converting pattern to PDF...");
-    const pdfBuffer = await htmlToPdf(patternHtml);
+    let pdfBuffer: ArrayBuffer;
+    try {
+      pdfBuffer = await htmlToPdf(patternHtml);
+    } catch (e: any) {
+      await sendAlert(resend, fromEmail, adminEmail, "PDF generation failed", e.message, payload);
+      throw e;
+    }
     logger.log("PDF generated", { bytes: pdfBuffer.byteLength });
 
     const pdfBase64 = bufferToBase64(pdfBuffer);
@@ -521,7 +527,13 @@ export const sisCardiganPipelineTask = task({
 
     // ── Step 5: Convert pattern HTML → PDF ────────────────────────
     logger.log("Converting cardigan pattern to PDF...");
-    const pdfBuffer = await htmlToPdf(patternHtml);
+    let pdfBuffer: ArrayBuffer;
+    try {
+      pdfBuffer = await htmlToPdf(patternHtml);
+    } catch (e: any) {
+      await sendAlert(resend, fromEmail, adminEmail, "Cardigan PDF generation failed", e.message, payload);
+      throw e;
+    }
     logger.log("Cardigan PDF generated", { bytes: pdfBuffer.byteLength });
 
     const pdfBase64 = bufferToBase64(pdfBuffer);
@@ -719,7 +731,13 @@ export const tdcrPipelineTask = task({
 
     // ── Step 5: Convert pattern HTML → PDF ────────────────────────
     logger.log("Converting TDCR pattern to PDF...");
-    const pdfBuffer = await htmlToPdf(patternHtml);
+    let pdfBuffer: ArrayBuffer;
+    try {
+      pdfBuffer = await htmlToPdf(patternHtml);
+    } catch (e: any) {
+      await sendAlert(resend, fromEmail, adminEmail, "TDCR PDF generation failed", e.message, payload);
+      throw e;
+    }
     logger.log("TDCR PDF generated", { bytes: pdfBuffer.byteLength });
 
     const pdfBase64 = bufferToBase64(pdfBuffer);
@@ -839,14 +857,32 @@ async function htmlToPdf(html: string): Promise<ArrayBuffer> {
     throw new Error("PDF_WORKER_URL env var is not set");
   }
 
-  const response = await fetch(pdfWorkerUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "text/plain",
-      "X-API-Key": pdfApiKey,
-    },
-    body: html,
-  });
+  // Client-side hard cap. Without this, a hung sis-pdf worker / Cloudflare
+  // Browser Rendering call leaves this fetch() pending indefinitely — no
+  // error, no timeout, the Trigger.dev run just sits there forever.
+  // 120s gives headroom above the worker's own 60s/90s internal timeouts.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 120_000);
+
+  let response: Response;
+  try {
+    response = await fetch(pdfWorkerUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain",
+        "X-API-Key": pdfApiKey,
+      },
+      body: html,
+      signal: controller.signal,
+    });
+  } catch (e: any) {
+    if (e.name === "AbortError") {
+      throw new Error("PDF worker request timed out after 120s (client-side abort)");
+    }
+    throw new Error(`PDF worker request failed: ${e.message}`);
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!response.ok) {
     const err = await response.text();
