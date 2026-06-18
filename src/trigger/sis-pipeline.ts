@@ -857,37 +857,22 @@ async function htmlToPdf(html: string): Promise<ArrayBuffer> {
     throw new Error("PDF_WORKER_URL env var is not set");
   }
 
-  // Client-side hard cap. Without this, a hung sis-pdf worker / Cloudflare
-  // Browser Rendering call leaves this fetch() pending indefinitely — no
-  // error, no timeout, the Trigger.dev run just sits there forever.
-  // 120s gives headroom above the worker's own 60s/90s internal timeouts.
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 120_000);
-
-  let response: Response;
-  try {
-    response = await fetch(pdfWorkerUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "text/plain",
-        "X-API-Key": pdfApiKey,
-      },
-      body: html,
-      signal: controller.signal,
-    });
-  } catch (e: any) {
-    if (e.name === "AbortError") {
-      throw new Error("PDF worker request timed out after 120s (client-side abort)");
-    }
-    throw new Error(`PDF worker request failed: ${e.message}`);
-  } finally {
-    clearTimeout(timeoutId);
-  }
+  const response = await fetch(pdfWorkerUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain",
+      "X-API-Key": pdfApiKey,
+    },
+    body: html,
+  });
 
   if (!response.ok) {
     const err = await response.text();
     throw new Error(`PDF worker failed: HTTP ${response.status}: ${err.slice(0, 300)}`);
   }
+
+  return response.arrayBuffer();
+}
 
   return response.arrayBuffer();
 }
