@@ -239,13 +239,7 @@ export const sisPipelineTask = task({
 
     // ── Step 5: Convert pattern HTML → PDF ────────────────────────
     logger.log("Converting pattern to PDF...");
-    let pdfBuffer: ArrayBuffer;
-    try {
-      pdfBuffer = await htmlToPdf(patternHtml);
-    } catch (e: any) {
-      await sendAlert(resend, fromEmail, adminEmail, "PDF generation failed", e.message, payload);
-      throw e;
-    }
+    const pdfBuffer = await htmlToPdf(patternHtml);
     logger.log("PDF generated", { bytes: pdfBuffer.byteLength });
 
     const pdfBase64 = bufferToBase64(pdfBuffer);
@@ -527,13 +521,7 @@ export const sisCardiganPipelineTask = task({
 
     // ── Step 5: Convert pattern HTML → PDF ────────────────────────
     logger.log("Converting cardigan pattern to PDF...");
-    let pdfBuffer: ArrayBuffer;
-    try {
-      pdfBuffer = await htmlToPdf(patternHtml);
-    } catch (e: any) {
-      await sendAlert(resend, fromEmail, adminEmail, "Cardigan PDF generation failed", e.message, payload);
-      throw e;
-    }
+    const pdfBuffer = await htmlToPdf(patternHtml);
     logger.log("Cardigan PDF generated", { bytes: pdfBuffer.byteLength });
 
     const pdfBase64 = bufferToBase64(pdfBuffer);
@@ -731,13 +719,7 @@ export const tdcrPipelineTask = task({
 
     // ── Step 5: Convert pattern HTML → PDF ────────────────────────
     logger.log("Converting TDCR pattern to PDF...");
-    let pdfBuffer: ArrayBuffer;
-    try {
-      pdfBuffer = await htmlToPdf(patternHtml);
-    } catch (e: any) {
-      await sendAlert(resend, fromEmail, adminEmail, "TDCR PDF generation failed", e.message, payload);
-      throw e;
-    }
+    const pdfBuffer = await htmlToPdf(patternHtml);
     logger.log("TDCR PDF generated", { bytes: pdfBuffer.byteLength });
 
     const pdfBase64 = bufferToBase64(pdfBuffer);
