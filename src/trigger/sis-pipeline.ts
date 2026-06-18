@@ -874,9 +874,6 @@ async function htmlToPdf(html: string): Promise<ArrayBuffer> {
   return response.arrayBuffer();
 }
 
-  return response.arrayBuffer();
-}
-
 // ── ArrayBuffer → base64 ──────────────────────────────────────────────
 
 function bufferToBase64(buffer: ArrayBuffer): string {
