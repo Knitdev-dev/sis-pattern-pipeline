@@ -1,4 +1,4 @@
-import { task, logger } from "@trigger.dev/sdk";
+import { task, logger, wait } from "@trigger.dev/sdk";
 import { Resend } from "resend";
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -242,7 +242,70 @@ export const sisPipelineTask = task({
     const pdfBuffer = await htmlToPdf(patternHtml);
     logger.log("PDF generated", { bytes: pdfBuffer.byteLength });
 
+    // ── Step 6: Admin approval gate ───────────────────────────────
+    logger.log("Sending admin preview for approval...");
+
+    const token = await wait.createToken({
+      timeout: "48h",
+    });
+
+    const approveUrl = `${appUrl}/approve?tokenId=${token.id}&action=approve`;
+    const rejectUrl  = `${appUrl}/approve?tokenId=${token.id}&action=reject`;
+
     const pdfBase64 = bufferToBase64(pdfBuffer);
+
+    await resend.emails.send({
+      from: fromEmail,
+      to: [adminEmail],
+      subject: `⏳ REVIEW NEEDED — SIS Pattern — ${payload.email || "no email"} — Bust ${payload.Bust_cm}cm`,
+      html: `
+        <h2>Pattern ready for review</h2>
+        <p>A new pattern has been generated. Please review the attached PDF before it is sent to the customer.</p>
+        <p><strong>Customer:</strong> ${payload.email || "no email"}</p>
+        <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row · ${payload.Ease_preference} · ${payload.Length_preference}</p>
+        <p><strong>Nodes active:</strong> ${JSON.stringify(calcJson.decision_path?.nodes_active)}</p>
+        <p><strong>Validation warnings:</strong> ${JSON.stringify(validation.warnings || [])}</p>
+        <hr>
+        <p>
+          <a href="${approveUrl}" style="background:#22c55e;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold;margin-right:12px">
+            ✅ Approve — Send to customer
+          </a>
+          <a href="${rejectUrl}" style="background:#ef4444;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold">
+            ❌ Reject — Do not send
+          </a>
+        </p>
+        <hr>
+        <h3>Calculation Log</h3>
+        <pre style="font-size:11px;background:#f5f5f5;padding:12px">${calcLog || "not generated"}</pre>
+      `,
+      attachments: [
+        {
+          filename: `pattern-${payload.Bust_cm}cm.pdf`,
+          content: pdfBase64,
+        },
+      ],
+    });
+
+    // ── Step 7: Wait for admin approval (up to 48 hours) ──────────
+    logger.log("Waiting for admin approval...");
+    const approvalResult = await wait.forToken<{ action: string }>(token.id);
+
+    logger.log("Approval result", { result: JSON.stringify(approvalResult) });
+
+    const output = approvalResult.ok ? (approvalResult.output as any) : null;
+    const action = output?.data?.action || output?.action;
+    if (action !== "approve") {
+      logger.log("Pattern rejected or timed out — not sending to customer");
+      await resend.emails.send({
+        from: fromEmail,
+        to: [adminEmail],
+        subject: `❌ Pattern NOT sent — ${payload.email || "no email"} — Bust ${payload.Bust_cm}cm`,
+        html: `<p>The pattern was <strong>rejected</strong> (or approval timed out) and was <strong>not</strong> sent to the customer.</p>`,
+      });
+      return { status: "rejected", runId: ctx.run.id };
+    }
+
+    logger.log("Pattern approved — sending to customer...");
 
     // ── Step 8: Send pattern PDF to customer ──────────────────────
     if (payload.email) {
@@ -524,7 +587,75 @@ export const sisCardiganPipelineTask = task({
     const pdfBuffer = await htmlToPdf(patternHtml);
     logger.log("Cardigan PDF generated", { bytes: pdfBuffer.byteLength });
 
+    // ── Step 6: Admin approval gate ───────────────────────────────
+    logger.log("Sending cardigan admin preview for approval...");
+
+    const token = await wait.createToken({
+      timeout: "48h",
+    });
+
+    const approveUrl = `${appUrl}/approve?tokenId=${token.id}&action=approve`;
+    const rejectUrl  = `${appUrl}/approve?tokenId=${token.id}&action=reject`;
+
     const pdfBase64 = bufferToBase64(pdfBuffer);
+
+    await resend.emails.send({
+      from: fromEmail,
+      to: [adminEmail],
+      subject: `⏳ REVIEW NEEDED — Cardigan Pattern — ${payload.email || "no email"} — Bust ${payload.Bust_cm}cm`,
+      html: `
+        <h2>Cardigan Pattern ready for review</h2>
+        <p>A new V-neck cardigan pattern has been generated. Please review the attached PDF before it is sent to the customer.</p>
+        <p><strong>Customer:</strong> ${payload.email || "no email"}</p>
+        <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row · ${payload.Ease_preference} · ${payload.Length_preference}</p>
+        <p><strong>Nodes active:</strong> ${JSON.stringify(calcJson.decision_path?.nodes_active)}</p>
+        <p><strong>Cardigan info:</strong> ${JSON.stringify({
+          front_sts: calcJson.cardigan?.Cardigan_front_sts,
+          band_sts: calcJson.cardigan?.Front_band_sts_total,
+          buttons: calcJson.cardigan?.Button_count,
+        })}</p>
+        <p><strong>Validation warnings:</strong> ${JSON.stringify(validation.warnings || [])}</p>
+        <hr>
+        <p>
+          <a href="${approveUrl}" style="background:#22c55e;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold;margin-right:12px">
+            ✅ Approve — Send to customer
+          </a>
+          <a href="${rejectUrl}" style="background:#ef4444;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold">
+            ❌ Reject — Do not send
+          </a>
+        </p>
+        <hr>
+        <h3>Calculation Log</h3>
+        <pre style="font-size:11px;background:#f5f5f5;padding:12px">${calcLog || "not generated"}</pre>
+      `,
+      attachments: [
+        {
+          filename: `cardigan-pattern-${payload.Bust_cm}cm.pdf`,
+          content: pdfBase64,
+        },
+      ],
+    });
+
+    // ── Step 7: Wait for admin approval (up to 48 hours) ──────────
+    logger.log("Waiting for cardigan admin approval...");
+    const approvalResult = await wait.forToken<{ action: string }>(token.id);
+
+    logger.log("Cardigan Approval result", { result: JSON.stringify(approvalResult) });
+
+    const output = approvalResult.ok ? (approvalResult.output as any) : null;
+    const action = output?.data?.action || output?.action;
+    if (action !== "approve") {
+      logger.log("Cardigan Pattern rejected or timed out — not sending to customer");
+      await resend.emails.send({
+        from: fromEmail,
+        to: [adminEmail],
+        subject: `❌ Cardigan Pattern NOT sent — ${payload.email || "no email"} — Bust ${payload.Bust_cm}cm`,
+        html: `<p>The cardigan pattern was <strong>rejected</strong> (or approval timed out) and was <strong>not</strong> sent to the customer.</p>`,
+      });
+      return { status: "rejected", runId: ctx.run.id };
+    }
+
+    logger.log("Cardigan Pattern approved — sending to customer...");
 
     // ── Step 8: Send pattern PDF to customer ──────────────────────
     if (payload.email) {
@@ -722,7 +853,70 @@ export const tdcrPipelineTask = task({
     const pdfBuffer = await htmlToPdf(patternHtml);
     logger.log("TDCR PDF generated", { bytes: pdfBuffer.byteLength });
 
+    // ── Step 6: Admin approval gate ───────────────────────────────
+    logger.log("Sending TDCR admin preview for approval...");
+
+    const token = await wait.createToken({
+      timeout: "48h",
+    });
+
+    const approveUrl = `${appUrl}/approve?tokenId=${token.id}&action=approve`;
+    const rejectUrl  = `${appUrl}/approve?tokenId=${token.id}&action=reject`;
+
     const pdfBase64 = bufferToBase64(pdfBuffer);
+
+    await resend.emails.send({
+      from: fromEmail,
+      to: [adminEmail],
+      subject: `⏳ REVIEW NEEDED — TDCR Pattern — ${payload.email || "no email"} — Bust ${payload.Bust_cm}cm`,
+      html: `
+        <h2>TDCR Pattern ready for review</h2>
+        <p>A new top-down circle raglan pattern has been generated. Please review the attached PDF before it is sent to the customer.</p>
+        <p><strong>Customer:</strong> ${payload.email || "no email"}</p>
+        <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row · ${payload.Ease_preference} · ${payload.Length_preference}</p>
+        <p><strong>Calculator checks:</strong> ${JSON.stringify(calcJson.checks)}</p>
+        <p><strong>Validation warnings:</strong> ${JSON.stringify(validation.warnings || [])}</p>
+        <hr>
+        <p>
+          <a href="${approveUrl}" style="background:#22c55e;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold;margin-right:12px">
+            ✅ Approve — Send to customer
+          </a>
+          <a href="${rejectUrl}" style="background:#ef4444;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold">
+            ❌ Reject — Do not send
+          </a>
+        </p>
+        <hr>
+        <h3>Calculation Log</h3>
+        <pre style="font-size:11px;background:#f5f5f5;padding:12px">${calcLog || "not generated"}</pre>
+      `,
+      attachments: [
+        {
+          filename: `tdcr-pattern-${payload.Bust_cm}cm.pdf`,
+          content: pdfBase64,
+        },
+      ],
+    });
+
+    // ── Step 7: Wait for admin approval (up to 48 hours) ──────────
+    logger.log("Waiting for TDCR admin approval...");
+    const approvalResult = await wait.forToken<{ action: string }>(token.id);
+
+    logger.log("TDCR Approval result", { result: JSON.stringify(approvalResult) });
+
+    const output = approvalResult.ok ? (approvalResult.output as any) : null;
+    const action = output?.data?.action || output?.action;
+    if (action !== "approve") {
+      logger.log("TDCR Pattern rejected or timed out — not sending to customer");
+      await resend.emails.send({
+        from: fromEmail,
+        to: [adminEmail],
+        subject: `❌ TDCR Pattern NOT sent — ${payload.email || "no email"} — Bust ${payload.Bust_cm}cm`,
+        html: `<p>The TDCR pattern was <strong>rejected</strong> (or approval timed out) and was <strong>not</strong> sent to the customer.</p>`,
+      });
+      return { status: "rejected", runId: ctx.run.id };
+    }
+
+    logger.log("TDCR Pattern approved — sending to customer...");
 
     // ── Step 8: Send pattern PDF to customer ──────────────────────
     if (payload.email) {
