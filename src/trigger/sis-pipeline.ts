@@ -1012,7 +1012,7 @@ async function callWorker(url: string, apiKey: string, body: object) {
   // gives headroom for legitimately long generations (64k max_tokens)
   // while still failing with a clear, attributable timeout message.
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 240_000);
+  const timeoutId = setTimeout(() => controller.abort(), 480_000);
 
   try {
     const response = await fetch(url, {
@@ -1038,7 +1038,7 @@ async function callWorker(url: string, apiKey: string, body: object) {
     }
   } catch (e: any) {
     if (e.name === "AbortError") {
-      return { error: `Worker request to ${url} timed out after 240s (client-side abort)` };
+      return { error: `Worker request to ${url} timed out after 480s (client-side abort)` };
     }
     return { error: e.message };
   } finally {
