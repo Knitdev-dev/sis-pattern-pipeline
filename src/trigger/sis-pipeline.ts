@@ -1004,6 +1004,16 @@ function extractTallyFields(payload: TallyWebhookPayload): any {
 // ── Worker caller ─────────────────────────────────────────────────────
 
 async function callWorker(url: string, apiKey: string, body: object) {
+  // PATCH (2026-06-19): explicit client-side timeout, matching htmlToPdf's
+  // pattern. Without this, a slow/hung formatter call (e.g. /output1
+  // streaming a large Claude response) leaves this fetch() pending with
+  // no diagnosable error — we previously saw a generic "fetch failed"
+  // after ~5 minutes with no indication of where/why it failed. 4 minutes
+  // gives headroom for legitimately long generations (64k max_tokens)
+  // while still failing with a clear, attributable timeout message.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 240_000);
+
   try {
     const response = await fetch(url, {
       method: "POST",
@@ -1012,6 +1022,7 @@ async function callWorker(url: string, apiKey: string, body: object) {
         "X-API-Key": apiKey,
       },
       body: JSON.stringify(body),
+      signal: controller.signal,
     });
 
     const text = await response.text();
@@ -1026,7 +1037,12 @@ async function callWorker(url: string, apiKey: string, body: object) {
       return { data: { output1: text } };
     }
   } catch (e: any) {
+    if (e.name === "AbortError") {
+      return { error: `Worker request to ${url} timed out after 240s (client-side abort)` };
+    }
     return { error: e.message };
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
