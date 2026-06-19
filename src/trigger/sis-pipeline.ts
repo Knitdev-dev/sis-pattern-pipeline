@@ -854,45 +854,75 @@ export const tallyWebhookTask = task({
 });
 
 // ── HTML → PDF ────────────────────────────────────────────────────────
+//
+// EMERGENCY FIX (2026-06-19): the sis-pdf Cloudflare Worker has an
+// unresolved platform-level bug where outbound fetch() calls that require
+// real backend processing time (Cloudflare's own Browser Rendering API,
+// AND Browserless.io) hang for exactly ~60s and fail with 502 — while the
+// identical calls succeed in under 1s via curl outside Workers. A trivial
+// fetch to a static page (example.com) from the same Worker succeeds in
+// 7ms, so it's not outbound networking in general — something specific
+// to this Worker/account can't complete slow upstream calls.
+//
+// Posted to Cloudflare community for investigation; until that's
+// resolved, this calls Browserless.io's PDF API DIRECTLY from Trigger.dev
+// (a Node runtime, not a Cloudflare Worker — unaffected by the bug),
+// skipping the sis-pdf Worker entirely. PDF_WORKER_URL/PDF_WORKER_API_KEY
+// are no longer used by this function; can be removed from env once
+// confirmed stable.
 
 async function htmlToPdf(html: string): Promise<ArrayBuffer> {
-  const pdfWorkerUrl = process.env.PDF_WORKER_URL;
-  const pdfApiKey   = process.env.PDF_WORKER_API_KEY || "";
+  const browserlessToken = process.env.BROWSERLESS_TOKEN;
+  const browserlessRegion = process.env.BROWSERLESS_REGION || "production-ams";
 
-  if (!pdfWorkerUrl) {
-    throw new Error("PDF_WORKER_URL env var is not set");
+  if (!browserlessToken) {
+    throw new Error("BROWSERLESS_TOKEN env var is not set");
   }
 
-  // Client-side hard cap. Without this, a hung sis-pdf worker / Cloudflare
-  // Browser Rendering call leaves this fetch() pending indefinitely — no
-  // error, no timeout, the Trigger.dev run just sits there forever.
-  // 120s gives headroom above the worker's own 60s/90s internal timeouts.
+  const browserlessUrl = `https://${browserlessRegion}.browserless.io/pdf?token=${browserlessToken}`;
+
+  // Client-side hard cap, same reasoning as before: without this, a hung
+  // upstream call leaves this fetch() pending indefinitely.
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 120_000);
+  const timeoutId = setTimeout(() => controller.abort(), 90_000);
 
   let response: Response;
   try {
-    response = await fetch(pdfWorkerUrl, {
+    response = await fetch(browserlessUrl, {
       method: "POST",
       headers: {
-        "Content-Type": "text/plain",
-        "X-API-Key": pdfApiKey,
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache",
       },
-      body: html,
+      body: JSON.stringify({
+        html: html,
+        // Wait for Paged.js to finish paginating before generating the PDF.
+        // The template sets body[data-paged-done="true"] once the polyfill
+        // has fully laid out all pages — see PagedConfig.after in template.
+        gotoOptions: { waitUntil: "domcontentloaded", timeout: 60000 },
+        waitForSelector: { selector: 'body[data-paged-done="true"]', timeout: 60000 },
+        options: {
+          format: "a4",
+          printBackground: true,
+          displayHeaderFooter: false,
+          preferCSSPageSize: true,
+          margin: { top: "0", bottom: "0", left: "0", right: "0" },
+        },
+      }),
       signal: controller.signal,
     });
   } catch (e: any) {
     if (e.name === "AbortError") {
-      throw new Error("PDF worker request timed out after 120s (client-side abort)");
+      throw new Error("Browserless request timed out after 90s (client-side abort)");
     }
-    throw new Error(`PDF worker request failed: ${e.message}`);
+    throw new Error(`Browserless request failed: ${e.message}`);
   } finally {
     clearTimeout(timeoutId);
   }
 
   if (!response.ok) {
     const err = await response.text();
-    throw new Error(`PDF worker failed: HTTP ${response.status}: ${err.slice(0, 300)}`);
+    throw new Error(`Browserless failed: HTTP ${response.status}: ${err.slice(0, 300)}`);
   }
 
   return response.arrayBuffer();
