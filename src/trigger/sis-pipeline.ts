@@ -835,43 +835,52 @@ export const tallyWebhookTask = task({
 // ── HTML → PDF ────────────────────────────────────────────────────────
 
 async function htmlToPdf(html: string): Promise<ArrayBuffer> {
-  const pdfWorkerUrl = process.env.PDF_WORKER_URL;
-  const pdfApiKey   = process.env.PDF_WORKER_API_KEY || "";
+  const token = process.env.BROWSERLESS_TOKEN;
+  const region = process.env.BROWSERLESS_REGION; // e.g. "production-sfo"
 
-  if (!pdfWorkerUrl) {
-    throw new Error("PDF_WORKER_URL env var is not set");
-  }
+  if (!token) throw new Error("BROWSERLESS_TOKEN env var is not set");
+  if (!region) throw new Error("BROWSERLESS_REGION env var is not set");
 
-  // Client-side hard cap. Without this, a hung sis-pdf worker / Cloudflare
-  // Browser Rendering call leaves this fetch() pending indefinitely — no
-  // error, no timeout, the Trigger.dev run just sits there forever.
-  // 120s gives headroom above the worker's own 60s/90s internal timeouts.
+  const browserlessUrl = `https://${region}.browserless.io/pdf?token=${token}`;
+
+  // Client-side hard cap, well above Browserless's own render timeout below,
+  // so a genuinely stuck request still surfaces as an error instead of
+  // hanging the Trigger.dev run indefinitely.
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 120_000);
+  const timeoutId = setTimeout(() => controller.abort(), 180_000);
 
   let response: Response;
   try {
-    response = await fetch(pdfWorkerUrl, {
+    response = await fetch(browserlessUrl, {
       method: "POST",
       headers: {
-        "Content-Type": "text/plain",
-        "X-API-Key": pdfApiKey,
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache",
       },
-      body: html,
+      body: JSON.stringify({
+        html,
+        options: {
+          printBackground: true,
+          // Browserless's own render timeout. Default is 30s, which is too
+          // short for large pattern documents — this is what was causing
+          // "Browserless API error: HTTP 408" failures.
+          timeout: 150_000,
+        },
+      }),
       signal: controller.signal,
     });
   } catch (e: any) {
     if (e.name === "AbortError") {
-      throw new Error("PDF worker request timed out after 120s (client-side abort)");
+      throw new Error("Browserless request timed out after 180s (client-side abort)");
     }
-    throw new Error(`PDF worker request failed: ${e.message}`);
+    throw new Error(`Browserless request failed: ${e.message}`);
   } finally {
     clearTimeout(timeoutId);
   }
 
   if (!response.ok) {
     const err = await response.text();
-    throw new Error(`PDF worker failed: HTTP ${response.status}: ${err.slice(0, 300)}`);
+    throw new Error(`Browserless PDF generation failed: HTTP ${response.status}: ${err.slice(0, 300)}`);
   }
 
   return response.arrayBuffer();
