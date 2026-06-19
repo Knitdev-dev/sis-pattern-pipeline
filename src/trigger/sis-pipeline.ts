@@ -1,6 +1,9 @@
 import { task, logger } from "@trigger.dev/sdk";
 import { Resend } from "resend";
 
+// ── Formatter (Claude direct call — bypasses broken Sis-formatter Worker) ──
+// See generateOutput1 / generateOutput23 near the bottom of this file.
+
 // ── Types ────────────────────────────────────────────────────────────
 
 // TDCR payload uses the same Tally-extractor field format as SIS
@@ -204,13 +207,9 @@ export const sisPipelineTask = task({
       }
     }
 
-    // ── Step 3: Formatter — Pattern HTML ──────────────────────────
-    logger.log("Calling formatter /output1...");
-    const output1Result = await callWorker(
-      process.env.FORMATTER_URL! + "/output1",
-      process.env.FORMATTER_API_KEY!,
-      calcJson
-    );
+    // ── Step 3: Formatter — Pattern HTML (direct Claude call) ─────
+    logger.log("Generating pattern HTML (direct)...");
+    const output1Result = await generateOutput1(calcJson);
 
     if (output1Result.error || !output1Result.data?.output1) {
       const msg = output1Result.error || "No output1 returned";
@@ -227,13 +226,9 @@ export const sisPipelineTask = task({
       end: output1Result.data._debug_end,
     });
 
-    // ── Step 4: Formatter — Check Sheet + Log ─────────────────────
-    logger.log("Calling formatter /output23...");
-    const output23Result = await callWorker(
-      process.env.FORMATTER_URL! + "/output23",
-      process.env.FORMATTER_API_KEY!,
-      calcJson
-    );
+    // ── Step 4: Formatter — Check Sheet + Log (direct Claude call) ─
+    logger.log("Generating check sheet + log (direct)...");
+    const output23Result = await generateOutput23(calcJson);
 
     const checkSheetHtml = output23Result.data?.output2 || null;
     const calcLog = output23Result.data?.output3 || null;
@@ -499,12 +494,8 @@ export const sisCardiganPipelineTask = task({
     // ── Step 3: Formatter — Pattern HTML ──────────────────────────
     // The shared formatter worker reads body.inputs.Variant to route to
     // cardigan_pattern_template + cardigan_formatter_prompt KV keys.
-    logger.log("Calling cardigan formatter /output1...");
-    const output1Result = await callWorker(
-      process.env.FORMATTER_URL! + "/output1",
-      process.env.FORMATTER_API_KEY!,
-      calcJson
-    );
+    logger.log("Generating cardigan pattern HTML (direct)...");
+    const output1Result = await generateOutput1(calcJson);
 
     if (output1Result.error || !output1Result.data?.output1) {
       const msg = output1Result.error || "No output1 returned";
@@ -516,12 +507,8 @@ export const sisCardiganPipelineTask = task({
     logger.log("Cardigan Pattern HTML generated", { chars: patternHtml.length });
 
     // ── Step 4: Formatter — Check Sheet + Log ─────────────────────
-    logger.log("Calling cardigan formatter /output23...");
-    const output23Result = await callWorker(
-      process.env.FORMATTER_URL! + "/output23",
-      process.env.FORMATTER_API_KEY!,
-      calcJson
-    );
+    logger.log("Generating cardigan check sheet + log (direct)...");
+    const output23Result = await generateOutput23(calcJson);
 
     const checkSheetHtml = output23Result.data?.output2 || null;
     const calcLog = output23Result.data?.output3 || null;
@@ -705,12 +692,8 @@ export const tdcrPipelineTask = task({
     // ── Step 3: Formatter — Pattern HTML ──────────────────────────
     // calcJson already contains pattern_type: "tdcr" (set by the calculator)
     // which routes the formatter to the TDCR KV keys.
-    logger.log("Calling TDCR formatter /output1...");
-    const output1Result = await callWorker(
-      process.env.FORMATTER_URL! + "/output1",
-      process.env.FORMATTER_API_KEY!,
-      calcJson
-    );
+    logger.log("Generating TDCR pattern HTML (direct)...");
+    const output1Result = await generateOutput1(calcJson);
 
     if (output1Result.error || !output1Result.data?.output1) {
       const msg = output1Result.error || "No output1 returned";
@@ -722,12 +705,8 @@ export const tdcrPipelineTask = task({
     logger.log("TDCR Pattern HTML generated", { chars: patternHtml.length });
 
     // ── Step 4: Formatter — Calculation Log only (no check sheet for TDCR) ──
-    logger.log("Calling TDCR formatter /output23 (log only)...");
-    const output23Result = await callWorker(
-      process.env.FORMATTER_URL! + "/output23",
-      process.env.FORMATTER_API_KEY!,
-      calcJson
-    );
+    logger.log("Generating TDCR log (direct)...");
+    const output23Result = await generateOutput23(calcJson);
 
     const calcLog = output23Result.data?.output3 || null;
 
@@ -854,75 +833,45 @@ export const tallyWebhookTask = task({
 });
 
 // ── HTML → PDF ────────────────────────────────────────────────────────
-//
-// EMERGENCY FIX (2026-06-19): the sis-pdf Cloudflare Worker has an
-// unresolved platform-level bug where outbound fetch() calls that require
-// real backend processing time (Cloudflare's own Browser Rendering API,
-// AND Browserless.io) hang for exactly ~60s and fail with 502 — while the
-// identical calls succeed in under 1s via curl outside Workers. A trivial
-// fetch to a static page (example.com) from the same Worker succeeds in
-// 7ms, so it's not outbound networking in general — something specific
-// to this Worker/account can't complete slow upstream calls.
-//
-// Posted to Cloudflare community for investigation; until that's
-// resolved, this calls Browserless.io's PDF API DIRECTLY from Trigger.dev
-// (a Node runtime, not a Cloudflare Worker — unaffected by the bug),
-// skipping the sis-pdf Worker entirely. PDF_WORKER_URL/PDF_WORKER_API_KEY
-// are no longer used by this function; can be removed from env once
-// confirmed stable.
 
 async function htmlToPdf(html: string): Promise<ArrayBuffer> {
-  const browserlessToken = process.env.BROWSERLESS_TOKEN;
-  const browserlessRegion = process.env.BROWSERLESS_REGION || "production-ams";
+  const pdfWorkerUrl = process.env.PDF_WORKER_URL;
+  const pdfApiKey   = process.env.PDF_WORKER_API_KEY || "";
 
-  if (!browserlessToken) {
-    throw new Error("BROWSERLESS_TOKEN env var is not set");
+  if (!pdfWorkerUrl) {
+    throw new Error("PDF_WORKER_URL env var is not set");
   }
 
-  const browserlessUrl = `https://${browserlessRegion}.browserless.io/pdf?token=${browserlessToken}`;
-
-  // Client-side hard cap, same reasoning as before: without this, a hung
-  // upstream call leaves this fetch() pending indefinitely.
+  // Client-side hard cap. Without this, a hung sis-pdf worker / Cloudflare
+  // Browser Rendering call leaves this fetch() pending indefinitely — no
+  // error, no timeout, the Trigger.dev run just sits there forever.
+  // 120s gives headroom above the worker's own 60s/90s internal timeouts.
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 90_000);
+  const timeoutId = setTimeout(() => controller.abort(), 120_000);
 
   let response: Response;
   try {
-    response = await fetch(browserlessUrl, {
+    response = await fetch(pdfWorkerUrl, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        "Cache-Control": "no-cache",
+        "Content-Type": "text/plain",
+        "X-API-Key": pdfApiKey,
       },
-      body: JSON.stringify({
-        html: html,
-        // Wait for Paged.js to finish paginating before generating the PDF.
-        // The template sets body[data-paged-done="true"] once the polyfill
-        // has fully laid out all pages — see PagedConfig.after in template.
-        gotoOptions: { waitUntil: "domcontentloaded", timeout: 60000 },
-        waitForSelector: { selector: 'body[data-paged-done="true"]', timeout: 60000 },
-        options: {
-          format: "a4",
-          printBackground: true,
-          displayHeaderFooter: false,
-          preferCSSPageSize: true,
-          margin: { top: "0", bottom: "0", left: "0", right: "0" },
-        },
-      }),
+      body: html,
       signal: controller.signal,
     });
   } catch (e: any) {
     if (e.name === "AbortError") {
-      throw new Error("Browserless request timed out after 90s (client-side abort)");
+      throw new Error("PDF worker request timed out after 120s (client-side abort)");
     }
-    throw new Error(`Browserless request failed: ${e.message}`);
+    throw new Error(`PDF worker request failed: ${e.message}`);
   } finally {
     clearTimeout(timeoutId);
   }
 
   if (!response.ok) {
     const err = await response.text();
-    throw new Error(`Browserless failed: HTTP ${response.status}: ${err.slice(0, 300)}`);
+    throw new Error(`PDF worker failed: HTTP ${response.status}: ${err.slice(0, 300)}`);
   }
 
   return response.arrayBuffer();
@@ -1001,19 +950,267 @@ function extractTallyFields(payload: TallyWebhookPayload): any {
   }
 }
 
+// ── Cloudflare KV fetch (REST API — separate from the broken Worker) ──
+
+const kvCache = new Map<string, string>();
+
+async function getKvTemplate(key: string): Promise<string> {
+  if (kvCache.has(key)) return kvCache.get(key)!;
+
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID!;
+  const namespaceId = process.env.CLOUDFLARE_KV_NAMESPACE_ID!;
+  const token = process.env.CLOUDFLARE_API_TOKEN!;
+
+  const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/values/${encodeURIComponent(key)}`;
+
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`KV fetch failed for key "${key}": HTTP ${response.status}: ${err.slice(0, 300)}`);
+  }
+
+  const text = await response.text();
+  kvCache.set(key, text);
+  return text;
+}
+
+// ── Direct Anthropic call (bypasses Cloudflare Workers entirely) ──────
+
+async function callClaudeDirect(prompt: string, maxTokens: number): Promise<{ text?: string; error?: string }> {
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": process.env.ANTHROPIC_API_KEY!,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: maxTokens,
+        thinking: { type: "disabled" },
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      return { error: `HTTP ${response.status}: ${errText.slice(0, 500)}` };
+    }
+
+    const data = await response.json();
+    const text = data.content
+      .filter((b: any) => b.type === "text")
+      .map((b: any) => b.text)
+      .join("\n");
+
+    return { text };
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
+function extractOutput(text: string, label: string): string | null {
+  const regex = new RegExp(
+    `${label}[\\s\\S]*?\\n([\\s\\S]*?)(?=\\n###?\\s*OUTPUT \\d|$)`,
+    "i"
+  );
+  const match = text.match(regex);
+  if (!match) return null;
+  return match[1].trim();
+}
+
+// ── Output 1: Pattern HTML (direct replacement for Sis-formatter /output1) ──
+
+async function generateOutput1(calcJson: any): Promise<{ data?: any; error?: string }> {
+  try {
+    const isTdcr = calcJson.pattern_type === "tdcr";
+    const isCardigan = !isTdcr && (!!calcJson.cardigan || calcJson.inputs?.Variant === "cardigan");
+    const isSacasis = !isTdcr && !isCardigan && !!calcJson.sacasis;
+
+    const promptKey = isTdcr ? "tdcr_formatter_prompt"
+                     : isCardigan ? "cardigan_formatter_prompt"
+                     : "formatter_prompt";
+    const templateKey = isTdcr ? "tdcr_pattern_template"
+                       : isCardigan ? "cardigan_pattern_template"
+                       : isSacasis ? "sacasis_pattern_template"
+                       : "pattern_template";
+
+    const [formatterPrompt, patternTemplate] = await Promise.all([
+      getKvTemplate(promptKey),
+      getKvTemplate(templateKey),
+    ]);
+
+    // ── Strip base64 images before sending to Claude ──────────────
+    const savedImages: string[] = [];
+    let patternTemplateStripped = patternTemplate.replace(
+      /(src=["'])(data:image\/[^;]+;base64,[^"']+)(["'])/g,
+      (_match, before, base64, after) => {
+        const index = savedImages.length;
+        savedImages.push(base64);
+        return `${before}IMAGE_PLACEHOLDER_${index}${after}`;
+      }
+    );
+
+    // ── Strip inline SVG blocks before sending to Claude ───────────
+    const savedSvgs: string[] = [];
+    patternTemplateStripped = patternTemplateStripped.replace(
+      /<svg[\s\S]*?<\/svg>/gi,
+      (match) => {
+        const index = savedSvgs.length;
+        savedSvgs.push(match);
+        return `SVG_PLACEHOLDER_${index}`;
+      }
+    );
+
+    let prompt: string;
+    if (isTdcr) {
+      prompt = `${formatterPrompt
+        .replace("{{json_from_calculator}}", JSON.stringify(calcJson, null, 2))
+        .replace("{{html_pattern_template}}", patternTemplateStripped)}
+
+IMPORTANT: Produce ONLY OUTPUT 1 — the complete filled-in Pattern HTML document.
+Do not produce Output 2.
+Output the full HTML from <!DOCTYPE html> to </html> and nothing else.
+No markdown fences, no labels, no preamble, no comments, no extra whitespace.
+Keep IMAGE_PLACEHOLDER_0, IMAGE_PLACEHOLDER_1 etc. exactly as-is in src attributes — do not change them.`;
+    } else {
+      prompt = `${formatterPrompt
+        .replace("{{json_from_call_1}}", JSON.stringify(calcJson, null, 2))
+        .replace("{{html_pattern_template}}", patternTemplateStripped)
+        .replace("{{html_check_sheet}}", "[NOT REQUIRED IN THIS CALL]")}
+
+IMPORTANT: Produce ONLY OUTPUT 1 — the complete filled-in Pattern HTML document.
+Do not produce Output 2 or Output 3.
+Output the full HTML from <!DOCTYPE html> to </html> and nothing else.
+No markdown fences, no labels, no preamble, no comments, no extra whitespace.
+Keep IMAGE_PLACEHOLDER_0, IMAGE_PLACEHOLDER_1 etc. exactly as-is in src attributes — do not change them.`;
+    }
+
+    const result = await callClaudeDirect(prompt, 64000);
+    if (result.error) return { error: result.error };
+
+    let output1 = result.text!;
+    savedImages.forEach((src, index) => {
+      output1 = output1.replace(`IMAGE_PLACEHOLDER_${index}`, src);
+    });
+
+    const svgVarSources: Record<string, any> = {
+      C_cm: calcJson?.calculated?.C_cm,
+      Finished_length_cm: calcJson?.lookups?.Finished_length_cm,
+      Sleeve_length_cm: calcJson?.inputs?.Sleeve_length_cm,
+      Upper_arm_cm: calcJson?.extras?.Upper_arm_cm ?? calcJson?.calculated?.Upper_arm_cm,
+      Armhole_depth_cm: calcJson?.lookups?.Armhole_depth_cm,
+      Shoulder_width_cm: calcJson?.lookups?.Shoulder_width_cm,
+      Front_neck_depth_for_V_cm: calcJson?.inputs?.Front_neck_depth_for_V_cm,
+    };
+    savedSvgs.forEach((svg, index) => {
+      let substituted = svg;
+      Object.entries(svgVarSources).forEach(([varName, value]) => {
+        if (value !== undefined && value !== null) {
+          substituted = substituted.replaceAll(`{${varName}}`, String(value));
+        }
+      });
+      output1 = output1.replace(`SVG_PLACEHOLDER_${index}`, substituted);
+    });
+
+    // Same validation the Worker did via _debug fields — fail loudly
+    // if Claude returned something that isn't real HTML.
+    const doctypeCount = (output1.match(/<!DOCTYPE html>/gi) || []).length;
+    const htmlTagCount = (output1.match(/<html/gi) || []).length;
+    if (doctypeCount === 0 || htmlTagCount === 0) {
+      return { error: `Formatter output1 is not valid HTML (doctype=${doctypeCount}, html_tag=${htmlTagCount}). Start: ${output1.slice(0, 300)}` };
+    }
+
+    return {
+      data: {
+        output1,
+        _debug_chars: output1.length,
+        _debug_start: output1.slice(0, 300),
+        _debug_end: output1.slice(-300),
+        _debug_doctype_count: doctypeCount,
+        _debug_html_tag_count: htmlTagCount,
+      },
+    };
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
+// ── Outputs 2 & 3: Check Sheet + Calculation Log (direct replacement) ──
+
+async function generateOutput23(calcJson: any): Promise<{ data?: any; error?: string }> {
+  try {
+    const isTdcr = calcJson.pattern_type === "tdcr";
+    const isCardigan = !isTdcr && (!!calcJson.cardigan || calcJson.inputs?.Variant === "cardigan");
+
+    if (isTdcr) {
+      const formatterPrompt = await getKvTemplate("tdcr_formatter_prompt");
+
+      const prompt = `${formatterPrompt
+        .replace("{{json_from_calculator}}", JSON.stringify(calcJson, null, 2))
+        .replace("{{html_pattern_template}}", "[NOT REQUIRED IN THIS CALL]")}
+
+IMPORTANT: Produce ONLY OUTPUT 2 — the Calculation Log.
+Label it exactly as:
+
+### OUTPUT 2 — CALCULATION LOG
+
+[calculation log here]`;
+
+      const result = await callClaudeDirect(prompt, 4000);
+      if (result.error) return { error: result.error };
+
+      const output3 = extractOutput(result.text!, "OUTPUT 2");
+      return { data: { output2: null, output3 } };
+    } else {
+      const promptKey = isCardigan ? "cardigan_formatter_prompt" : "formatter_prompt";
+      const checkSheetKey = isCardigan ? "cardigan_check_sheet" : "check_sheet";
+
+      const [formatterPrompt, checkSheet] = await Promise.all([
+        getKvTemplate(promptKey),
+        getKvTemplate(checkSheetKey),
+      ]);
+
+      const prompt = `${formatterPrompt
+        .replace("{{json_from_call_1}}", JSON.stringify(calcJson, null, 2))
+        .replace("{{html_pattern_template}}", "[NOT REQUIRED IN THIS CALL]")
+        .replace("{{html_check_sheet}}", checkSheet)}
+
+IMPORTANT: Produce ONLY OUTPUT 2 and OUTPUT 3.
+Label them exactly as:
+
+### OUTPUT 2 — CHECK SHEET HTML FILE
+
+[full check sheet HTML here]
+
+### OUTPUT 3 — CALCULATION LOG
+
+[calculation log here]`;
+
+      const result = await callClaudeDirect(prompt, 8000);
+      if (result.error) return { error: result.error };
+
+      const output2 = extractOutput(result.text!, "OUTPUT 2");
+      const output3 = extractOutput(result.text!, "OUTPUT 3");
+
+      if (!output2 || !output3) {
+        return { error: `Failed to parse outputs 2 and 3. Preview: ${result.text!.slice(0, 1000)}` };
+      }
+
+      return { data: { output2, output3 } };
+    }
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
 // ── Worker caller ─────────────────────────────────────────────────────
 
 async function callWorker(url: string, apiKey: string, body: object) {
-  // PATCH (2026-06-19): explicit client-side timeout, matching htmlToPdf's
-  // pattern. Without this, a slow/hung formatter call (e.g. /output1
-  // streaming a large Claude response) leaves this fetch() pending with
-  // no diagnosable error — we previously saw a generic "fetch failed"
-  // after ~5 minutes with no indication of where/why it failed. 4 minutes
-  // gives headroom for legitimately long generations (64k max_tokens)
-  // while still failing with a clear, attributable timeout message.
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 480_000);
-
   try {
     const response = await fetch(url, {
       method: "POST",
@@ -1022,7 +1219,6 @@ async function callWorker(url: string, apiKey: string, body: object) {
         "X-API-Key": apiKey,
       },
       body: JSON.stringify(body),
-      signal: controller.signal,
     });
 
     const text = await response.text();
@@ -1037,12 +1233,7 @@ async function callWorker(url: string, apiKey: string, body: object) {
       return { data: { output1: text } };
     }
   } catch (e: any) {
-    if (e.name === "AbortError") {
-      return { error: `Worker request to ${url} timed out after 480s (client-side abort)` };
-    }
     return { error: e.message };
-  } finally {
-    clearTimeout(timeoutId);
   }
 }
 
