@@ -1013,6 +1013,69 @@ async function callClaudeDirect(prompt: string, maxTokens: number): Promise<{ te
   }
 }
 
+// ── Streaming variant — required by the API for max_tokens > ~21,333  ──
+// (the API rejects/warns on long non-streaming requests). Used for
+// output1, whose max_tokens (64000) is well above that threshold.
+async function callClaudeStreamingDirect(prompt: string, maxTokens: number): Promise<{ text?: string; error?: string }> {
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": process.env.ANTHROPIC_API_KEY!,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: maxTokens,
+        thinking: { type: "disabled" },
+        stream: true,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      return { error: `HTTP ${response.status}: ${errText.slice(0, 500)}` };
+    }
+    if (!response.body) {
+      return { error: "No response body from streaming request" };
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let fullText = "";
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const data = line.slice(6).trim();
+        if (data === "[DONE]") continue;
+        try {
+          const evt = JSON.parse(data);
+          if (evt.type === "content_block_delta" && evt.delta?.type === "text_delta") {
+            fullText += evt.delta.text;
+          }
+        } catch {
+          // ignore malformed SSE line
+        }
+      }
+    }
+
+    return { text: fullText };
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
 function extractOutput(text: string, label: string): string | null {
   const regex = new RegExp(
     `${label}[\\s\\S]*?\\n([\\s\\S]*?)(?=\\n###?\\s*OUTPUT \\d|$)`,
@@ -1076,6 +1139,9 @@ IMPORTANT: Produce ONLY OUTPUT 1 — the complete filled-in Pattern HTML documen
 Do not produce Output 2.
 Output the full HTML from <!DOCTYPE html> to </html> and nothing else.
 No markdown fences, no labels, no preamble, no comments, no extra whitespace.
+Do NOT explain your reasoning, decisions, or which template path you used —
+output ONLY the final HTML document, starting with <!DOCTYPE html> as the
+very first characters of your response.
 Keep IMAGE_PLACEHOLDER_0, IMAGE_PLACEHOLDER_1 etc. exactly as-is in src attributes — do not change them.`;
     } else {
       prompt = `${formatterPrompt
@@ -1087,43 +1153,63 @@ IMPORTANT: Produce ONLY OUTPUT 1 — the complete filled-in Pattern HTML documen
 Do not produce Output 2 or Output 3.
 Output the full HTML from <!DOCTYPE html> to </html> and nothing else.
 No markdown fences, no labels, no preamble, no comments, no extra whitespace.
+Do NOT explain your reasoning, decisions, or which template path you used —
+output ONLY the final HTML document, starting with <!DOCTYPE html> as the
+very first characters of your response.
 Keep IMAGE_PLACEHOLDER_0, IMAGE_PLACEHOLDER_1 etc. exactly as-is in src attributes — do not change them.`;
     }
 
-    const result = await callClaudeDirect(prompt, 64000);
-    if (result.error) return { error: result.error };
+    let output1 = "";
+    let lastError = "";
+    let doctypeCount = 0;
+    let htmlTagCount = 0;
 
-    let output1 = result.text!;
-    savedImages.forEach((src, index) => {
-      output1 = output1.replace(`IMAGE_PLACEHOLDER_${index}`, src);
-    });
+    // Retry once if Claude narrates instead of returning raw HTML —
+    // this is an occasional model-behavior flake, not a systemic error.
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      const result = await callClaudeStreamingDirect(prompt, 64000);
+      if (result.error) {
+        lastError = result.error;
+        continue;
+      }
 
-    const svgVarSources: Record<string, any> = {
-      C_cm: calcJson?.calculated?.C_cm,
-      Finished_length_cm: calcJson?.lookups?.Finished_length_cm,
-      Sleeve_length_cm: calcJson?.inputs?.Sleeve_length_cm,
-      Upper_arm_cm: calcJson?.extras?.Upper_arm_cm ?? calcJson?.calculated?.Upper_arm_cm,
-      Armhole_depth_cm: calcJson?.lookups?.Armhole_depth_cm,
-      Shoulder_width_cm: calcJson?.lookups?.Shoulder_width_cm,
-      Front_neck_depth_for_V_cm: calcJson?.inputs?.Front_neck_depth_for_V_cm,
-    };
-    savedSvgs.forEach((svg, index) => {
-      let substituted = svg;
-      Object.entries(svgVarSources).forEach(([varName, value]) => {
-        if (value !== undefined && value !== null) {
-          substituted = substituted.replaceAll(`{${varName}}`, String(value));
-        }
+      let candidate = result.text!;
+      savedImages.forEach((src, index) => {
+        candidate = candidate.replace(`IMAGE_PLACEHOLDER_${index}`, src);
       });
-      output1 = output1.replace(`SVG_PLACEHOLDER_${index}`, substituted);
-    });
 
-    // Same validation the Worker did via _debug fields — fail loudly
-    // if Claude returned something that isn't real HTML.
-    const doctypeCount = (output1.match(/<!DOCTYPE html>/gi) || []).length;
-    const htmlTagCount = (output1.match(/<html/gi) || []).length;
-    if (doctypeCount === 0 || htmlTagCount === 0) {
-      return { error: `Formatter output1 is not valid HTML (doctype=${doctypeCount}, html_tag=${htmlTagCount}). Start: ${output1.slice(0, 300)}` };
+      const svgVarSources: Record<string, any> = {
+        C_cm: calcJson?.calculated?.C_cm,
+        Finished_length_cm: calcJson?.lookups?.Finished_length_cm,
+        Sleeve_length_cm: calcJson?.inputs?.Sleeve_length_cm,
+        Upper_arm_cm: calcJson?.extras?.Upper_arm_cm ?? calcJson?.calculated?.Upper_arm_cm,
+        Armhole_depth_cm: calcJson?.lookups?.Armhole_depth_cm,
+        Shoulder_width_cm: calcJson?.lookups?.Shoulder_width_cm,
+        Front_neck_depth_for_V_cm: calcJson?.inputs?.Front_neck_depth_for_V_cm,
+      };
+      savedSvgs.forEach((svg, index) => {
+        let substituted = svg;
+        Object.entries(svgVarSources).forEach(([varName, value]) => {
+          if (value !== undefined && value !== null) {
+            substituted = substituted.replaceAll(`{${varName}}`, String(value));
+          }
+        });
+        candidate = candidate.replace(`SVG_PLACEHOLDER_${index}`, substituted);
+      });
+
+      doctypeCount = (candidate.match(/<!DOCTYPE html>/gi) || []).length;
+      htmlTagCount = (candidate.match(/<html/gi) || []).length;
+
+      if (doctypeCount > 0 && htmlTagCount > 0) {
+        output1 = candidate;
+        lastError = "";
+        break;
+      }
+
+      lastError = `Formatter output1 is not valid HTML (doctype=${doctypeCount}, html_tag=${htmlTagCount}). Start: ${candidate.slice(0, 300)}`;
     }
+
+    if (lastError) return { error: lastError };
 
     return {
       data: {
