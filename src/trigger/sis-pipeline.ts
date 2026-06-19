@@ -219,7 +219,13 @@ export const sisPipelineTask = task({
     }
 
     const patternHtml = output1Result.data.output1;
-    logger.log("Pattern HTML generated", { chars: patternHtml.length });
+    logger.log("Pattern HTML generated", {
+  chars: patternHtml.length,
+  doctypeCount: output1Result.data._debug_doctype_count,
+  htmlTagCount: output1Result.data._debug_html_tag_count,
+  start: output1Result.data._debug_start,
+  end: output1Result.data._debug_end,
+});
 
     // ── Step 4: Formatter — Check Sheet + Log ─────────────────────
     logger.log("Calling formatter /output23...");
