@@ -989,9 +989,8 @@ async function callClaudeDirect(prompt: string, maxTokens: number): Promise<{ te
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-6",
+        model: "claude-opus-4-5",
         max_tokens: maxTokens,
-        thinking: { type: "disabled" },
         messages: [{ role: "user", content: prompt }],
       }),
     });
@@ -1026,9 +1025,8 @@ async function callClaudeStreamingDirect(prompt: string, maxTokens: number): Pro
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-6",
+        model: "claude-opus-4-5",
         max_tokens: maxTokens,
-        thinking: { type: "disabled" },
         stream: true,
         messages: [{ role: "user", content: prompt }],
       }),
@@ -1102,10 +1100,19 @@ async function generateOutput1(calcJson: any): Promise<{ data?: any; error?: str
                        : isSacasis ? "sacasis_pattern_template"
                        : "pattern_template";
 
-    const [formatterPrompt, patternTemplate] = await Promise.all([
+    const [formatterPromptFull, patternTemplate] = await Promise.all([
       getKvTemplate(promptKey),
       getKvTemplate(templateKey),
     ]);
+
+    // Drop the OUTPUT 2 / OUTPUT 3 sections entirely for this call.
+    // Those sections instruct Claude to narrate a decision path / calc log —
+    // leaving them in causes Claude to sometimes apply that narration
+    // instinct to this output1-only call instead of returning raw HTML.
+    const output2Marker = formatterPromptFull.search(/^### OUTPUT 2/m);
+    const formatterPrompt = output2Marker !== -1
+      ? formatterPromptFull.slice(0, output2Marker)
+      : formatterPromptFull;
 
     // ── Strip base64 images before sending to Claude ──────────────
     const savedImages: string[] = [];
