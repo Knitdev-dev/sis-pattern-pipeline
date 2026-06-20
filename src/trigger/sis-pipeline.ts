@@ -859,20 +859,30 @@ async function htmlToPdf(html: string): Promise<ArrayBuffer> {
       },
       body: JSON.stringify({
         html,
+        // Wait for Paged.js to finish paginating before generating the PDF.
+        // The template sets body[data-paged-done="true"] once the polyfill
+        // has fully laid out all pages — this is the exact mechanism the
+        // old working sis-pdf Worker used. Without waiting for this signal,
+        // Browserless can snapshot before Paged.js renders any content,
+        // producing a near-blank PDF.
+        waitForSelector: { selector: 'body[data-paged-done="true"]', timeout: 90_000 },
+        // "domcontentloaded" fires once the HTML is parsed and the blocking
+        // Paged.js <script> tag has executed, without waiting on fonts/
+        // images first — leaving more of the time budget for the actual
+        // pagination step above. ("networkidle0"/"load" wait on all
+        // resources first, which can eat the whole budget before Paged.js
+        // even starts, or hang if something keeps a connection open.)
+        gotoOptions: { waitUntil: "domcontentloaded", timeout: 60_000 },
         options: {
+          format: "a4",
           printBackground: true,
-          // Browserless's own render timeout. Default is 30s, which is too
-          // short for large pattern documents — this is what was causing
-          // "Browserless API error: HTTP 408" failures.
+          displayHeaderFooter: false,
+          // Let the @page rules in the CSS control page size and margins.
+          preferCSSPageSize: true,
+          margin: { top: "0", bottom: "0", left: "0", right: "0" },
+          // Browserless's own hard cap for the whole render. Default is
+          // 30s, far too short for large pattern documents.
           timeout: 150_000,
-        },
-        // Wait until the page is fully loaded (fonts, stylesheets, any
-        // layout JS like Paged.js) before taking the PDF snapshot.
-        // Without this, Browserless can render before content finishes
-        // loading, producing a near-blank PDF with only static chrome.
-        gotoOptions: {
-          waitUntil: "networkidle0",
-          timeout: 60_000,
         },
       }),
       signal: controller.signal,
