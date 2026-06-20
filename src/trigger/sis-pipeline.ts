@@ -866,6 +866,14 @@ async function htmlToPdf(html: string): Promise<ArrayBuffer> {
           // "Browserless API error: HTTP 408" failures.
           timeout: 150_000,
         },
+        // Wait until the page is fully loaded (fonts, stylesheets, any
+        // layout JS like Paged.js) before taking the PDF snapshot.
+        // Without this, Browserless can render before content finishes
+        // loading, producing a near-blank PDF with only static chrome.
+        gotoOptions: {
+          waitUntil: "networkidle0",
+          timeout: 60_000,
+        },
       }),
       signal: controller.signal,
     });
@@ -1025,6 +1033,12 @@ async function callClaudeDirect(prompt: string, maxTokens: number): Promise<{ te
 // (the API rejects/warns on long non-streaming requests). Used for
 // output1, whose max_tokens (64000) is well above that threshold.
 async function callClaudeStreamingDirect(prompt: string, maxTokens: number): Promise<{ text?: string; error?: string }> {
+  // Overall hard cap on the whole request (connect + stream to completion).
+  // Without this, a stalled connection or silent stream leaves this call
+  // pending indefinitely — no error, the Trigger.dev run just sits there.
+  const controller = new AbortController();
+  const overallTimeoutId = setTimeout(() => controller.abort(), 280_000); // under the 30m task max_duration
+
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -1039,6 +1053,7 @@ async function callClaudeStreamingDirect(prompt: string, maxTokens: number): Pro
         stream: true,
         messages: [{ role: "user", content: prompt }],
       }),
+      signal: controller.signal,
     });
 
     if (!response.ok) {
@@ -1054,8 +1069,17 @@ async function callClaudeStreamingDirect(prompt: string, maxTokens: number): Pro
     let fullText = "";
     let buffer = "";
 
+    // Per-chunk stall guard: if no new data arrives for 60s mid-stream
+    // (connection alive but silently stuck), bail out instead of hanging.
     while (true) {
-      const { done, value } = await reader.read();
+      const stallTimeoutId = setTimeout(() => controller.abort(), 60_000);
+      let result: ReadableStreamReadResult<Uint8Array>;
+      try {
+        result = await reader.read();
+      } finally {
+        clearTimeout(stallTimeoutId);
+      }
+      const { done, value } = result;
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
 
@@ -1079,7 +1103,12 @@ async function callClaudeStreamingDirect(prompt: string, maxTokens: number): Pro
 
     return { text: fullText };
   } catch (e: any) {
+    if (e.name === "AbortError") {
+      return { error: "Claude streaming request stalled or exceeded time limit (no data for 60s, or overall 280s cap reached)" };
+    }
     return { error: e.message };
+  } finally {
+    clearTimeout(overallTimeoutId);
   }
 }
 
