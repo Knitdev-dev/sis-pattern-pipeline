@@ -1,8 +1,5 @@
-import { task, logger } from "@trigger.dev/sdk";
+import { task, logger, wait } from "@trigger.dev/sdk";
 import { Resend } from "resend";
-
-// ── Formatter (Claude direct call — bypasses broken Sis-formatter Worker) ──
-// See generateOutput1 / generateOutput23 near the bottom of this file.
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -207,9 +204,13 @@ export const sisPipelineTask = task({
       }
     }
 
-    // ── Step 3: Formatter — Pattern HTML (direct Claude call) ─────
-    logger.log("Generating pattern HTML (direct)...");
-    const output1Result = await generateOutput1(calcJson);
+    // ── Step 3: Formatter — Pattern HTML ──────────────────────────
+    logger.log("Calling formatter /output1...");
+    const output1Result = await callWorker(
+      process.env.FORMATTER_URL! + "/output1",
+      process.env.FORMATTER_API_KEY!,
+      calcJson
+    );
 
     if (output1Result.error || !output1Result.data?.output1) {
       const msg = output1Result.error || "No output1 returned";
@@ -226,9 +227,13 @@ export const sisPipelineTask = task({
       end: output1Result.data._debug_end,
     });
 
-    // ── Step 4: Formatter — Check Sheet + Log (direct Claude call) ─
-    logger.log("Generating check sheet + log (direct)...");
-    const output23Result = await generateOutput23(calcJson);
+    // ── Step 4: Formatter — Check Sheet + Log ─────────────────────
+    logger.log("Calling formatter /output23...");
+    const output23Result = await callWorker(
+      process.env.FORMATTER_URL! + "/output23",
+      process.env.FORMATTER_API_KEY!,
+      calcJson
+    );
 
     const checkSheetHtml = output23Result.data?.output2 || null;
     const calcLog = output23Result.data?.output3 || null;
@@ -250,6 +255,13 @@ export const sisPipelineTask = task({
     logger.log("PDF generated", { bytes: pdfBuffer.byteLength });
 
     const pdfBase64 = bufferToBase64(pdfBuffer);
+
+    // ── Step 6/7: Approval gate — email Yulia, block until approved ──
+    const approved = await waitForApproval(resend, fromEmail, pdfBase64, "SIS", payload, ctx.run.id);
+    if (!approved) {
+      logger.log("SIS pattern rejected — not sending to customer");
+      return { status: "rejected", runId: ctx.run.id };
+    }
 
     // ── Step 8: Send pattern PDF to customer ──────────────────────
     if (payload.email) {
@@ -494,8 +506,12 @@ export const sisCardiganPipelineTask = task({
     // ── Step 3: Formatter — Pattern HTML ──────────────────────────
     // The shared formatter worker reads body.inputs.Variant to route to
     // cardigan_pattern_template + cardigan_formatter_prompt KV keys.
-    logger.log("Generating cardigan pattern HTML (direct)...");
-    const output1Result = await generateOutput1(calcJson);
+    logger.log("Calling cardigan formatter /output1...");
+    const output1Result = await callWorker(
+      process.env.FORMATTER_URL! + "/output1",
+      process.env.FORMATTER_API_KEY!,
+      calcJson
+    );
 
     if (output1Result.error || !output1Result.data?.output1) {
       const msg = output1Result.error || "No output1 returned";
@@ -507,8 +523,12 @@ export const sisCardiganPipelineTask = task({
     logger.log("Cardigan Pattern HTML generated", { chars: patternHtml.length });
 
     // ── Step 4: Formatter — Check Sheet + Log ─────────────────────
-    logger.log("Generating cardigan check sheet + log (direct)...");
-    const output23Result = await generateOutput23(calcJson);
+    logger.log("Calling cardigan formatter /output23...");
+    const output23Result = await callWorker(
+      process.env.FORMATTER_URL! + "/output23",
+      process.env.FORMATTER_API_KEY!,
+      calcJson
+    );
 
     const checkSheetHtml = output23Result.data?.output2 || null;
     const calcLog = output23Result.data?.output3 || null;
@@ -530,6 +550,13 @@ export const sisCardiganPipelineTask = task({
     logger.log("Cardigan PDF generated", { bytes: pdfBuffer.byteLength });
 
     const pdfBase64 = bufferToBase64(pdfBuffer);
+
+    // ── Step 6/7: Approval gate — email Yulia, block until approved ──
+    const approved = await waitForApproval(resend, fromEmail, pdfBase64, "Cardigan", payload, ctx.run.id);
+    if (!approved) {
+      logger.log("Cardigan pattern rejected — not sending to customer");
+      return { status: "rejected", runId: ctx.run.id };
+    }
 
     // ── Step 8: Send pattern PDF to customer ──────────────────────
     if (payload.email) {
@@ -692,8 +719,12 @@ export const tdcrPipelineTask = task({
     // ── Step 3: Formatter — Pattern HTML ──────────────────────────
     // calcJson already contains pattern_type: "tdcr" (set by the calculator)
     // which routes the formatter to the TDCR KV keys.
-    logger.log("Generating TDCR pattern HTML (direct)...");
-    const output1Result = await generateOutput1(calcJson);
+    logger.log("Calling TDCR formatter /output1...");
+    const output1Result = await callWorker(
+      process.env.FORMATTER_URL! + "/output1",
+      process.env.FORMATTER_API_KEY!,
+      calcJson
+    );
 
     if (output1Result.error || !output1Result.data?.output1) {
       const msg = output1Result.error || "No output1 returned";
@@ -705,8 +736,12 @@ export const tdcrPipelineTask = task({
     logger.log("TDCR Pattern HTML generated", { chars: patternHtml.length });
 
     // ── Step 4: Formatter — Calculation Log only (no check sheet for TDCR) ──
-    logger.log("Generating TDCR log (direct)...");
-    const output23Result = await generateOutput23(calcJson);
+    logger.log("Calling TDCR formatter /output23 (log only)...");
+    const output23Result = await callWorker(
+      process.env.FORMATTER_URL! + "/output23",
+      process.env.FORMATTER_API_KEY!,
+      calcJson
+    );
 
     const calcLog = output23Result.data?.output3 || null;
 
@@ -726,6 +761,13 @@ export const tdcrPipelineTask = task({
     logger.log("TDCR PDF generated", { bytes: pdfBuffer.byteLength });
 
     const pdfBase64 = bufferToBase64(pdfBuffer);
+
+    // ── Step 6/7: Approval gate — email Yulia, block until approved ──
+    const approved = await waitForApproval(resend, fromEmail, pdfBase64, "TDCR", payload, ctx.run.id);
+    if (!approved) {
+      logger.log("TDCR pattern rejected — not sending to customer");
+      return { status: "rejected", runId: ctx.run.id };
+    }
 
     // ── Step 8: Send pattern PDF to customer ──────────────────────
     if (payload.email) {
@@ -832,73 +874,89 @@ export const tallyWebhookTask = task({
   },
 });
 
+// ── Approval gate ─────────────────────────────────────────────────────
+// Emails a preview PDF to Yulia with Approve / Reject buttons, then blocks
+// the run until she clicks one (via the sis-approval worker completing the
+// waitpoint token). Returns true if approved, false if rejected/timed out.
+
+async function waitForApproval(
+  resend: Resend,
+  fromEmail: string,
+  pdfBase64: string,
+  label: string,
+  payload: any,
+  runId: string
+): Promise<boolean> {
+  const token = await wait.createToken({ timeout: "7d" });
+  const base = process.env.APPROVAL_URL!;
+  const approveUrl = `${base}/approve?tokenId=${token.id}&action=approve`;
+  const rejectUrl = `${base}/approve?tokenId=${token.id}&action=reject`;
+
+  await resend.emails.send({
+    from: fromEmail,
+    to: ["yulia@knitpage.com"],
+    subject: `🔍 APPROVAL NEEDED — ${label} — ${payload.email || "no email"} — Bust ${payload.Bust_cm}cm`,
+    html: `
+      <h2>Pattern ready for approval</h2>
+      <p><strong>Customer:</strong> ${payload.email || "no email"}</p>
+      <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row · ${payload.Ease_preference} · ${payload.Length_preference}</p>
+      <p><strong>Run ID:</strong> ${runId}</p>
+      <p style="margin-top:24px">
+        <a href="${approveUrl}" style="background:#16a34a;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-family:sans-serif">✅ Approve &amp; send to customer</a>
+        &nbsp;&nbsp;
+        <a href="${rejectUrl}" style="background:#dc2626;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-family:sans-serif">✕ Reject</a>
+      </p>
+    `,
+    attachments: [{ filename: `preview-${payload.Bust_cm}cm.pdf`, content: pdfBase64 }],
+  });
+  logger.log("Approval email sent", { to: "yulia@knitpage.com", tokenId: token.id });
+
+  const result = await wait.forToken<{ action: string }>(token);
+  const approved = result.ok && result.output?.action === "approve";
+  logger.log("Approval resolved", { approved, tokenId: token.id });
+  return approved;
+}
+
 // ── HTML → PDF ────────────────────────────────────────────────────────
 
 async function htmlToPdf(html: string): Promise<ArrayBuffer> {
-  const token = process.env.BROWSERLESS_TOKEN;
-  const region = process.env.BROWSERLESS_REGION; // e.g. "production-sfo"
+  const pdfWorkerUrl = process.env.PDF_WORKER_URL;
+  const pdfApiKey   = process.env.PDF_WORKER_API_KEY || "";
 
-  if (!token) throw new Error("BROWSERLESS_TOKEN env var is not set");
-  if (!region) throw new Error("BROWSERLESS_REGION env var is not set");
+  if (!pdfWorkerUrl) {
+    throw new Error("PDF_WORKER_URL env var is not set");
+  }
 
-  const browserlessUrl = `https://${region}.browserless.io/pdf?token=${token}`;
-
-  // Client-side hard cap, well above Browserless's own render timeout below,
-  // so a genuinely stuck request still surfaces as an error instead of
-  // hanging the Trigger.dev run indefinitely.
+  // Client-side hard cap. Without this, a hung sis-pdf worker / Cloudflare
+  // Browser Rendering call leaves this fetch() pending indefinitely — no
+  // error, no timeout, the Trigger.dev run just sits there forever.
+  // 120s gives headroom above the worker's own 60s/90s internal timeouts.
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 180_000);
+  const timeoutId = setTimeout(() => controller.abort(), 120_000);
 
   let response: Response;
   try {
-    response = await fetch(browserlessUrl, {
+    response = await fetch(pdfWorkerUrl, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        "Cache-Control": "no-cache",
+        "Content-Type": "text/plain",
+        "X-API-Key": pdfApiKey,
       },
-      body: JSON.stringify({
-        html,
-        // Wait for Paged.js to finish paginating before generating the PDF.
-        // The template sets body[data-paged-done="true"] once the polyfill
-        // has fully laid out all pages — this is the exact mechanism the
-        // old working sis-pdf Worker used. Without waiting for this signal,
-        // Browserless can snapshot before Paged.js renders any content,
-        // producing a near-blank PDF.
-        waitForSelector: { selector: 'body[data-paged-done="true"]', timeout: 90_000 },
-        // "domcontentloaded" fires once the HTML is parsed and the blocking
-        // Paged.js <script> tag has executed, without waiting on fonts/
-        // images first — leaving more of the time budget for the actual
-        // pagination step above. ("networkidle0"/"load" wait on all
-        // resources first, which can eat the whole budget before Paged.js
-        // even starts, or hang if something keeps a connection open.)
-        gotoOptions: { waitUntil: "domcontentloaded", timeout: 60_000 },
-        options: {
-          format: "a4",
-          printBackground: true,
-          displayHeaderFooter: false,
-          // Let the @page rules in the CSS control page size and margins.
-          preferCSSPageSize: true,
-          margin: { top: "0", bottom: "0", left: "0", right: "0" },
-          // Browserless's own hard cap for the whole render. Default is
-          // 30s, far too short for large pattern documents.
-          timeout: 150_000,
-        },
-      }),
+      body: html,
       signal: controller.signal,
     });
   } catch (e: any) {
     if (e.name === "AbortError") {
-      throw new Error("Browserless request timed out after 180s (client-side abort)");
+      throw new Error("PDF worker request timed out after 120s (client-side abort)");
     }
-    throw new Error(`Browserless request failed: ${e.message}`);
+    throw new Error(`PDF worker request failed: ${e.message}`);
   } finally {
     clearTimeout(timeoutId);
   }
 
   if (!response.ok) {
     const err = await response.text();
-    throw new Error(`Browserless PDF generation failed: HTTP ${response.status}: ${err.slice(0, 300)}`);
+    throw new Error(`PDF worker failed: HTTP ${response.status}: ${err.slice(0, 300)}`);
   }
 
   return response.arrayBuffer();
@@ -974,378 +1032,6 @@ function extractTallyFields(payload: TallyWebhookPayload): any {
     return result;
   } catch (e: any) {
     return { error: `Field extraction failed: ${e.message}` };
-  }
-}
-
-// ── Cloudflare KV fetch (REST API — separate from the broken Worker) ──
-
-const kvCache = new Map<string, string>();
-
-async function getKvTemplate(key: string): Promise<string> {
-  if (kvCache.has(key)) return kvCache.get(key)!;
-
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID!;
-  const namespaceId = process.env.CLOUDFLARE_KV_NAMESPACE_ID!;
-  const token = process.env.CLOUDFLARE_API_TOKEN!;
-
-  const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/values/${encodeURIComponent(key)}`;
-
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`KV fetch failed for key "${key}": HTTP ${response.status}: ${err.slice(0, 300)}`);
-  }
-
-  const text = await response.text();
-  kvCache.set(key, text);
-  return text;
-}
-
-// ── Direct Anthropic call (bypasses Cloudflare Workers entirely) ──────
-
-async function callClaudeDirect(prompt: string, maxTokens: number): Promise<{ text?: string; error?: string }> {
-  try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY!,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-opus-4-5",
-        max_tokens: maxTokens,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      return { error: `HTTP ${response.status}: ${errText.slice(0, 500)}` };
-    }
-
-    const data = await response.json();
-    const text = data.content
-      .filter((b: any) => b.type === "text")
-      .map((b: any) => b.text)
-      .join("\n");
-
-    return { text };
-  } catch (e: any) {
-    return { error: e.message };
-  }
-}
-
-// ── Streaming variant — required by the API for max_tokens > ~21,333  ──
-// (the API rejects/warns on long non-streaming requests). Used for
-// output1, whose max_tokens (64000) is well above that threshold.
-async function callClaudeStreamingDirect(prompt: string, maxTokens: number): Promise<{ text?: string; error?: string }> {
-  // Overall hard cap on the whole request (connect + stream to completion).
-  // Without this, a stalled connection or silent stream leaves this call
-  // pending indefinitely — no error, the Trigger.dev run just sits there.
-  const controller = new AbortController();
-  const overallTimeoutId = setTimeout(() => controller.abort(), 280_000); // under the 30m task max_duration
-
-  try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY!,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-opus-4-5",
-        max_tokens: maxTokens,
-        stream: true,
-        messages: [{ role: "user", content: prompt }],
-      }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      return { error: `HTTP ${response.status}: ${errText.slice(0, 500)}` };
-    }
-    if (!response.body) {
-      return { error: "No response body from streaming request" };
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let fullText = "";
-    let buffer = "";
-
-    // Per-chunk stall guard: if no new data arrives for 60s mid-stream
-    // (connection alive but silently stuck), bail out instead of hanging.
-    while (true) {
-      const stallTimeoutId = setTimeout(() => controller.abort(), 60_000);
-      let result: ReadableStreamReadResult<Uint8Array>;
-      try {
-        result = await reader.read();
-      } finally {
-        clearTimeout(stallTimeoutId);
-      }
-      const { done, value } = result;
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-
-      for (const line of lines) {
-        if (!line.startsWith("data: ")) continue;
-        const data = line.slice(6).trim();
-        if (data === "[DONE]") continue;
-        try {
-          const evt = JSON.parse(data);
-          if (evt.type === "content_block_delta" && evt.delta?.type === "text_delta") {
-            fullText += evt.delta.text;
-          }
-        } catch {
-          // ignore malformed SSE line
-        }
-      }
-    }
-
-    return { text: fullText };
-  } catch (e: any) {
-    if (e.name === "AbortError") {
-      return { error: "Claude streaming request stalled or exceeded time limit (no data for 60s, or overall 280s cap reached)" };
-    }
-    return { error: e.message };
-  } finally {
-    clearTimeout(overallTimeoutId);
-  }
-}
-
-function extractOutput(text: string, label: string): string | null {
-  const regex = new RegExp(
-    `${label}[\\s\\S]*?\\n([\\s\\S]*?)(?=\\n###?\\s*OUTPUT \\d|$)`,
-    "i"
-  );
-  const match = text.match(regex);
-  if (!match) return null;
-  return match[1].trim();
-}
-
-// ── Output 1: Pattern HTML (direct replacement for Sis-formatter /output1) ──
-
-async function generateOutput1(calcJson: any): Promise<{ data?: any; error?: string }> {
-  try {
-    const isTdcr = calcJson.pattern_type === "tdcr";
-    const isCardigan = !isTdcr && (!!calcJson.cardigan || calcJson.inputs?.Variant === "cardigan");
-    const isSacasis = !isTdcr && !isCardigan && !!calcJson.sacasis;
-
-    const promptKey = isTdcr ? "tdcr_formatter_prompt"
-                     : isCardigan ? "cardigan_formatter_prompt"
-                     : "formatter_prompt";
-    const templateKey = isTdcr ? "tdcr_pattern_template"
-                       : isCardigan ? "cardigan_pattern_template"
-                       : isSacasis ? "sacasis_pattern_template"
-                       : "pattern_template";
-
-    const [formatterPromptFull, patternTemplate] = await Promise.all([
-      getKvTemplate(promptKey),
-      getKvTemplate(templateKey),
-    ]);
-
-    // Drop the OUTPUT 2 / OUTPUT 3 sections entirely for this call.
-    // Those sections instruct Claude to narrate a decision path / calc log —
-    // leaving them in causes Claude to sometimes apply that narration
-    // instinct to this output1-only call instead of returning raw HTML.
-    const output2Marker = formatterPromptFull.search(/^### OUTPUT 2/m);
-    const formatterPrompt = output2Marker !== -1
-      ? formatterPromptFull.slice(0, output2Marker)
-      : formatterPromptFull;
-
-    // ── Strip base64 images before sending to Claude ──────────────
-    const savedImages: string[] = [];
-    let patternTemplateStripped = patternTemplate.replace(
-      /(src=["'])(data:image\/[^;]+;base64,[^"']+)(["'])/g,
-      (_match, before, base64, after) => {
-        const index = savedImages.length;
-        savedImages.push(base64);
-        return `${before}IMAGE_PLACEHOLDER_${index}${after}`;
-      }
-    );
-
-    // ── Strip inline SVG blocks before sending to Claude ───────────
-    const savedSvgs: string[] = [];
-    patternTemplateStripped = patternTemplateStripped.replace(
-      /<svg[\s\S]*?<\/svg>/gi,
-      (match) => {
-        const index = savedSvgs.length;
-        savedSvgs.push(match);
-        return `SVG_PLACEHOLDER_${index}`;
-      }
-    );
-
-    let prompt: string;
-    if (isTdcr) {
-      prompt = `${formatterPrompt
-        .replace("{{json_from_calculator}}", JSON.stringify(calcJson, null, 2))
-        .replace("{{html_pattern_template}}", patternTemplateStripped)}
-
-IMPORTANT: Produce ONLY OUTPUT 1 — the complete filled-in Pattern HTML document.
-Do not produce Output 2.
-Output the full HTML from <!DOCTYPE html> to </html> and nothing else.
-No markdown fences, no labels, no preamble, no comments, no extra whitespace.
-Do NOT explain your reasoning, decisions, or which template path you used —
-output ONLY the final HTML document, starting with <!DOCTYPE html> as the
-very first characters of your response.
-Keep IMAGE_PLACEHOLDER_0, IMAGE_PLACEHOLDER_1 etc. exactly as-is in src attributes — do not change them.`;
-    } else {
-      prompt = `${formatterPrompt
-        .replace("{{json_from_call_1}}", JSON.stringify(calcJson, null, 2))
-        .replace("{{html_pattern_template}}", patternTemplateStripped)
-        .replace("{{html_check_sheet}}", "[NOT REQUIRED IN THIS CALL]")}
-
-IMPORTANT: Produce ONLY OUTPUT 1 — the complete filled-in Pattern HTML document.
-Do not produce Output 2 or Output 3.
-Output the full HTML from <!DOCTYPE html> to </html> and nothing else.
-No markdown fences, no labels, no preamble, no comments, no extra whitespace.
-Do NOT explain your reasoning, decisions, or which template path you used —
-output ONLY the final HTML document, starting with <!DOCTYPE html> as the
-very first characters of your response.
-Keep IMAGE_PLACEHOLDER_0, IMAGE_PLACEHOLDER_1 etc. exactly as-is in src attributes — do not change them.`;
-    }
-
-    let output1 = "";
-    let lastError = "";
-    let doctypeCount = 0;
-    let htmlTagCount = 0;
-
-    // Retry once if Claude narrates instead of returning raw HTML —
-    // this is an occasional model-behavior flake, not a systemic error.
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      const result = await callClaudeStreamingDirect(prompt, 64000);
-      if (result.error) {
-        lastError = result.error;
-        continue;
-      }
-
-      let candidate = result.text!;
-      savedImages.forEach((src, index) => {
-        candidate = candidate.replace(`IMAGE_PLACEHOLDER_${index}`, src);
-      });
-
-      const svgVarSources: Record<string, any> = {
-        C_cm: calcJson?.calculated?.C_cm,
-        Finished_length_cm: calcJson?.lookups?.Finished_length_cm,
-        Sleeve_length_cm: calcJson?.inputs?.Sleeve_length_cm,
-        Upper_arm_cm: calcJson?.extras?.Upper_arm_cm ?? calcJson?.calculated?.Upper_arm_cm,
-        Armhole_depth_cm: calcJson?.lookups?.Armhole_depth_cm,
-        Shoulder_width_cm: calcJson?.lookups?.Shoulder_width_cm,
-        Front_neck_depth_for_V_cm: calcJson?.inputs?.Front_neck_depth_for_V_cm,
-      };
-      savedSvgs.forEach((svg, index) => {
-        let substituted = svg;
-        Object.entries(svgVarSources).forEach(([varName, value]) => {
-          if (value !== undefined && value !== null) {
-            substituted = substituted.replaceAll(`{${varName}}`, String(value));
-          }
-        });
-        candidate = candidate.replace(`SVG_PLACEHOLDER_${index}`, substituted);
-      });
-
-      doctypeCount = (candidate.match(/<!DOCTYPE html>/gi) || []).length;
-      htmlTagCount = (candidate.match(/<html/gi) || []).length;
-
-      if (doctypeCount > 0 && htmlTagCount > 0) {
-        output1 = candidate;
-        lastError = "";
-        break;
-      }
-
-      lastError = `Formatter output1 is not valid HTML (doctype=${doctypeCount}, html_tag=${htmlTagCount}). Start: ${candidate.slice(0, 300)}`;
-    }
-
-    if (lastError) return { error: lastError };
-
-    return {
-      data: {
-        output1,
-        _debug_chars: output1.length,
-        _debug_start: output1.slice(0, 300),
-        _debug_end: output1.slice(-300),
-        _debug_doctype_count: doctypeCount,
-        _debug_html_tag_count: htmlTagCount,
-      },
-    };
-  } catch (e: any) {
-    return { error: e.message };
-  }
-}
-
-// ── Outputs 2 & 3: Check Sheet + Calculation Log (direct replacement) ──
-
-async function generateOutput23(calcJson: any): Promise<{ data?: any; error?: string }> {
-  try {
-    const isTdcr = calcJson.pattern_type === "tdcr";
-    const isCardigan = !isTdcr && (!!calcJson.cardigan || calcJson.inputs?.Variant === "cardigan");
-
-    if (isTdcr) {
-      const formatterPrompt = await getKvTemplate("tdcr_formatter_prompt");
-
-      const prompt = `${formatterPrompt
-        .replace("{{json_from_calculator}}", JSON.stringify(calcJson, null, 2))
-        .replace("{{html_pattern_template}}", "[NOT REQUIRED IN THIS CALL]")}
-
-IMPORTANT: Produce ONLY OUTPUT 2 — the Calculation Log.
-Label it exactly as:
-
-### OUTPUT 2 — CALCULATION LOG
-
-[calculation log here]`;
-
-      const result = await callClaudeDirect(prompt, 4000);
-      if (result.error) return { error: result.error };
-
-      const output3 = extractOutput(result.text!, "OUTPUT 2");
-      return { data: { output2: null, output3 } };
-    } else {
-      const promptKey = isCardigan ? "cardigan_formatter_prompt" : "formatter_prompt";
-      const checkSheetKey = isCardigan ? "cardigan_check_sheet" : "check_sheet";
-
-      const [formatterPrompt, checkSheet] = await Promise.all([
-        getKvTemplate(promptKey),
-        getKvTemplate(checkSheetKey),
-      ]);
-
-      const prompt = `${formatterPrompt
-        .replace("{{json_from_call_1}}", JSON.stringify(calcJson, null, 2))
-        .replace("{{html_pattern_template}}", "[NOT REQUIRED IN THIS CALL]")
-        .replace("{{html_check_sheet}}", checkSheet)}
-
-IMPORTANT: Produce ONLY OUTPUT 2 and OUTPUT 3.
-Label them exactly as:
-
-### OUTPUT 2 — CHECK SHEET HTML FILE
-
-[full check sheet HTML here]
-
-### OUTPUT 3 — CALCULATION LOG
-
-[calculation log here]`;
-
-      const result = await callClaudeDirect(prompt, 8000);
-      if (result.error) return { error: result.error };
-
-      const output2 = extractOutput(result.text!, "OUTPUT 2");
-      const output3 = extractOutput(result.text!, "OUTPUT 3");
-
-      if (!output2 || !output3) {
-        return { error: `Failed to parse outputs 2 and 3. Preview: ${result.text!.slice(0, 1000)}` };
-      }
-
-      return { data: { output2, output3 } };
-    }
-  } catch (e: any) {
-    return { error: e.message };
   }
 }
 
