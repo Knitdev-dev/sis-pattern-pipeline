@@ -236,7 +236,26 @@ export const sisPipelineTask = task({
     );
 
     const checkSheetHtml = output23Result.data?.output2 || null;
-    const calcLog = output23Result.data?.output3 || null;
+    let calcLog = output23Result.data?.output3 || null;
+
+    // ── Fallback: log-only regeneration if OUTPUT 3 was dropped ────
+    // /output23 asks one generation for check sheet + log; when the check
+    // sheet is long the model can run out of budget and omit the log. If
+    // that happened, call /output3 (log-only) so the log gets a fresh
+    // token budget and 100s window. Check sheet is kept from /output23.
+    if (!calcLog) {
+      logger.warn("SIS log missing from /output23 — retrying via /output3");
+      const logOnlyResult = await callWorker(
+        process.env.FORMATTER_URL! + "/output3",
+        process.env.FORMATTER_API_KEY!,
+        calcJson
+      );
+      calcLog = logOnlyResult.data?.output3 || null;
+      if (!calcLog) {
+        logger.warn("SIS log still missing after /output3", { error: logOnlyResult.error });
+        await sendAlert(resend, fromEmail, adminEmail, "SIS calc log missing", logOnlyResult.error || "No output3 from /output3", payload);
+      }
+    }
 
     if (!checkSheetHtml) {
       logger.warn("Check sheet not generated", { error: output23Result.error });
@@ -531,7 +550,26 @@ export const sisCardiganPipelineTask = task({
     );
 
     const checkSheetHtml = output23Result.data?.output2 || null;
-    const calcLog = output23Result.data?.output3 || null;
+    let calcLog = output23Result.data?.output3 || null;
+
+    // ── Fallback: log-only regeneration if OUTPUT 3 was dropped ────
+    // /output23 asks one generation for check sheet + log; when the check
+    // sheet is long the model can run out of budget and omit the log. If
+    // that happened, call /output3 (log-only) so the log gets a fresh
+    // token budget and 100s window. Check sheet is kept from /output23.
+    if (!calcLog) {
+      logger.warn("Cardigan log missing from /output23 — retrying via /output3");
+      const logOnlyResult = await callWorker(
+        process.env.FORMATTER_URL! + "/output3",
+        process.env.FORMATTER_API_KEY!,
+        calcJson
+      );
+      calcLog = logOnlyResult.data?.output3 || null;
+      if (!calcLog) {
+        logger.warn("Cardigan log still missing after /output3", { error: logOnlyResult.error });
+        await sendAlert(resend, fromEmail, adminEmail, "Cardigan calc log missing", logOnlyResult.error || "No output3 from /output3", payload);
+      }
+    }
 
     if (!checkSheetHtml) {
       logger.warn("Cardigan Check sheet not generated", { error: output23Result.error });
