@@ -276,7 +276,7 @@ export const sisPipelineTask = task({
     const pdfBase64 = bufferToBase64(pdfBuffer);
 
     // ── Step 6/7: Approval gate — email Yulia, block until approved ──
-    const approved = await waitForApproval(resend, fromEmail, pdfBase64, "SIS", payload, ctx.run.id);
+    const approved = await waitForApproval(resend, fromEmail, pdfBase64, "SIS", payload, ctx.run.id, calcLog);
     if (!approved) {
       logger.log("SIS pattern rejected — not sending to customer");
       return { status: "rejected", runId: ctx.run.id };
@@ -316,9 +316,6 @@ export const sisPipelineTask = task({
         <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row · ${payload.Ease_preference} · ${payload.Length_preference}</p>
         <p><strong>Nodes active:</strong> ${JSON.stringify(calcJson.decision_path?.nodes_active)}</p>
         <p><strong>Validation warnings:</strong> ${JSON.stringify(validation.warnings || [])}</p>
-        <hr>
-        <h3>Calculation Log</h3>
-        <pre style="font-size:11px;background:#f5f5f5;padding:12px">${calcLog || "not generated"}</pre>
       `,
       attachments: [
         {
@@ -590,7 +587,7 @@ export const sisCardiganPipelineTask = task({
     const pdfBase64 = bufferToBase64(pdfBuffer);
 
     // ── Step 6/7: Approval gate — email Yulia, block until approved ──
-    const approved = await waitForApproval(resend, fromEmail, pdfBase64, "Cardigan", payload, ctx.run.id);
+    const approved = await waitForApproval(resend, fromEmail, pdfBase64, "Cardigan", payload, ctx.run.id, calcLog);
     if (!approved) {
       logger.log("Cardigan pattern rejected — not sending to customer");
       return { status: "rejected", runId: ctx.run.id };
@@ -635,9 +632,6 @@ export const sisCardiganPipelineTask = task({
           buttons: calcJson.cardigan?.Button_count,
         })}</p>
         <p><strong>Validation warnings:</strong> ${JSON.stringify(validation.warnings || [])}</p>
-        <hr>
-        <h3>Calculation Log</h3>
-        <pre style="font-size:11px;background:#f5f5f5;padding:12px">${calcLog || "not generated"}</pre>
       `,
       attachments: [
         {
@@ -801,7 +795,7 @@ export const tdcrPipelineTask = task({
     const pdfBase64 = bufferToBase64(pdfBuffer);
 
     // ── Step 6/7: Approval gate — email Yulia, block until approved ──
-    const approved = await waitForApproval(resend, fromEmail, pdfBase64, "TDCR", payload, ctx.run.id);
+    const approved = await waitForApproval(resend, fromEmail, pdfBase64, "TDCR", payload, ctx.run.id, calcLog);
     if (!approved) {
       logger.log("TDCR pattern rejected — not sending to customer");
       return { status: "rejected", runId: ctx.run.id };
@@ -841,9 +835,6 @@ export const tdcrPipelineTask = task({
         <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row · ${payload.Ease_preference} · ${payload.Length_preference}</p>
         <p><strong>Calculator checks:</strong> ${JSON.stringify(calcJson.checks)}</p>
         <p><strong>Validation warnings:</strong> ${JSON.stringify(validation.warnings || [])}</p>
-        <hr>
-        <h3>Calculation Log</h3>
-        <pre style="font-size:11px;background:#f5f5f5;padding:12px">${calcLog || "not generated"}</pre>
       `,
       attachments: [
         {
@@ -923,7 +914,8 @@ async function waitForApproval(
   pdfBase64: string,
   label: string,
   payload: any,
-  runId: string
+  runId: string,
+  calcLog: string | null
 ): Promise<boolean> {
   const token = await wait.createToken({ timeout: "7d" });
   const base = process.env.APPROVAL_URL!;
@@ -939,6 +931,9 @@ async function waitForApproval(
       <p><strong>Customer:</strong> ${payload.email || "no email"}</p>
       <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row · ${payload.Ease_preference} · ${payload.Length_preference}</p>
       <p><strong>Run ID:</strong> ${runId}</p>
+      <hr>
+      <h3>Calculation Log</h3>
+      <pre style="font-size:11px;background:#f5f5f5;padding:12px;white-space:pre-wrap">${calcLog || "not generated"}</pre>
       <p style="margin-top:24px">
         <a href="${approveUrl}" style="background:#16a34a;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-family:sans-serif">✅ Approve &amp; send to customer</a>
         &nbsp;&nbsp;
