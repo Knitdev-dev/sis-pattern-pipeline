@@ -26,6 +26,7 @@ interface SisPayload {
   Length_preference: string;
   Front_neck_depth_for_V_cm: number;
   Sleeve_length_cm: number;
+  Upper_arm_cm?: number;   // V2 sleeve (Jul '26): optional, customer-measured
   construction_method?: string;
   special_details?: string;
   Variant?: string;
@@ -1025,6 +1026,7 @@ function extractTallyFields(payload: TallyWebhookPayload): any {
       "Length preference": "Length_preference",
       "Front_neck_depth_for_V_cm": "Front_neck_depth_for_V_cm",
       "Sleeve_length_cm": "Sleeve_length_cm",
+      "Upper_arm_cm": "Upper_arm_cm",
       "Construction_method": "construction_method",
       "Special details": "special_details",
       "Garment_type": "garment_type",
@@ -1032,7 +1034,7 @@ function extractTallyFields(payload: TallyWebhookPayload): any {
 
     const numericFields = new Set([
       "Bust_cm", "Gauge_st", "Gauge_row",
-      "Front_neck_depth_for_V_cm", "Sleeve_length_cm",
+      "Front_neck_depth_for_V_cm", "Sleeve_length_cm", "Upper_arm_cm",
     ]);
 
     for (const field of payload.data?.fields || []) {
