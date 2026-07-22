@@ -228,6 +228,9 @@ export const sisPipelineTask = task({
       end: output1Result.data._debug_end,
     });
 
+    // ── Step 3b: Store interactive web version (non-fatal) ────────
+    const patternUrl = await storePatternHtml(resend, fromEmail, adminEmail, patternHtml, payload);
+
     // ── Step 4: Formatter — Check Sheet + Log ─────────────────────
     logger.log("Calling formatter /output23...");
     const output23Result = await callWorker(
@@ -539,6 +542,9 @@ export const sisCardiganPipelineTask = task({
     const patternHtml = output1Result.data.output1;
     logger.log("Cardigan Pattern HTML generated", { chars: patternHtml.length });
 
+    // ── Step 3b: Store interactive web version (non-fatal) ────────
+    const patternUrl = await storePatternHtml(resend, fromEmail, adminEmail, patternHtml, payload);
+
     // ── Step 4: Formatter — Check Sheet + Log ─────────────────────
     logger.log("Calling cardigan formatter /output23...");
     const output23Result = await callWorker(
@@ -768,6 +774,9 @@ export const tdcrPipelineTask = task({
     const patternHtml = output1Result.data.output1;
     logger.log("TDCR Pattern HTML generated", { chars: patternHtml.length });
 
+    // ── Step 3b: Store interactive web version (non-fatal) ────────
+    const patternUrl = await storePatternHtml(resend, fromEmail, adminEmail, patternHtml, payload);
+
     // ── Step 4: Formatter — Calculation Log only (no check sheet for TDCR) ──
     logger.log("Calling TDCR formatter /output23 (log only)...");
     const output23Result = await callWorker(
@@ -949,6 +958,43 @@ async function waitForApproval(
   const approved = result.ok && result.output?.action === "approve";
   logger.log("Approval resolved", { approved, tokenId: token.id });
   return approved;
+}
+
+// ── Interactive pattern store (Phase 1, Jul '26) ─────────────────────
+// Stores pattern HTML in PREVIEW_KV via preview-api POST /api/pattern so
+// it can be served at GET /p/{token}. NON-FATAL: on any failure we log,
+// alert admin, return null, and the PDF/email flow continues unchanged.
+// Env: PREVIEW_API_URL, PATTERN_WRITE_KEY (must match preview-api secret).
+
+async function storePatternHtml(
+  resend: Resend,
+  fromEmail: string,
+  adminEmail: string,
+  patternHtml: string,
+  payload: any
+): Promise<string | null> {
+  const token = crypto.randomUUID();
+  try {
+    const resp = await fetch(process.env.PREVIEW_API_URL! + "/api/pattern", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.PATTERN_WRITE_KEY!}`,
+      },
+      body: JSON.stringify({ token, html: patternHtml }),
+    });
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => "");
+      throw new Error(`preview-api ${resp.status}: ${text.slice(0, 300)}`);
+    }
+    const url = process.env.PREVIEW_API_URL! + "/p/" + token;
+    logger.log("Interactive pattern stored", { url });
+    return url;
+  } catch (e: any) {
+    logger.warn("Pattern store failed (non-fatal)", { err: e.message });
+    await sendAlert(resend, fromEmail, adminEmail, "Pattern store failed", e.message, payload);
+    return null;
+  }
 }
 
 // ── HTML → PDF ────────────────────────────────────────────────────────
