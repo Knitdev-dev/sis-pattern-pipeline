@@ -15,6 +15,18 @@ interface TdcrPayload {
   Length_preference: string;
   Sleeve_length_cm: number;
   construction_method?: string;
+
+  // ── Resume mode (optional) ──
+  // Present only when a knitter has stopped at the mid-yoke checkpoint,
+  // measured, and come back outside tolerance. The first four are required
+  // together; Resume_inc_rounds is an optional cross-check on the other two.
+  // Absent on a normal order, in which case the calculator behaves exactly as
+  // before — one code path serves both.
+  Resume_rounds_worked?: number;
+  Resume_sts_on_needle?: number;
+  Resume_circ_cm?: number;
+  Resume_depth_cm?: number;
+  Resume_inc_rounds?: number;
 }
 
 interface SisPayload {
@@ -674,7 +686,7 @@ export const tdcrPipelineTask = task({
 
     // Translate Tally-format payload to TDCR calculator format
     // (calculator expects lowercase keys + plural gauge_sts / gauge_rows)
-    const calcInput = {
+    const calcInput: any = {
       bust_cm: payload.Bust_cm,
       gauge_sts: payload.Gauge_st,
       gauge_rows: payload.Gauge_row,
@@ -682,6 +694,41 @@ export const tdcrPipelineTask = task({
       length_preference: payload.Length_preference,
       sleeve_length_cm: payload.Sleeve_length_cm,
     };
+
+    // ── Resume mode ──
+    // All four measurement fields must be present together — a partial set is
+    // a broken submission, not a resume, and is better caught here with a
+    // clear message than passed through as a silently-normal order.
+    const resumeFields = [
+      payload.Resume_rounds_worked,
+      payload.Resume_sts_on_needle,
+      payload.Resume_circ_cm,
+      payload.Resume_depth_cm,
+    ];
+    const resumeCount = resumeFields.filter((v) => v !== undefined && v !== null && v !== ("" as any)).length;
+    const isResume = resumeCount === 4;
+
+    if (resumeCount > 0 && !isResume) {
+      const msg = `Resume submission is incomplete: ${resumeCount} of 4 measurement fields supplied `
+        + `(rounds_worked=${payload.Resume_rounds_worked}, sts_on_needle=${payload.Resume_sts_on_needle}, `
+        + `circ=${payload.Resume_circ_cm}, depth=${payload.Resume_depth_cm}). Not processed.`;
+      logger.error("TDCR resume incomplete", { msg });
+      await sendAlert(resend, fromEmail, adminEmail, "TDCR resume submission incomplete", msg, payload);
+      return { status: "resume_incomplete", runId: ctx.run.id };
+    }
+
+    if (isResume) {
+      calcInput.resume = {
+        rounds_worked:    payload.Resume_rounds_worked,
+        sts_on_needle:    payload.Resume_sts_on_needle,
+        measured_circ_cm: payload.Resume_circ_cm,
+        measured_depth_cm: payload.Resume_depth_cm,
+      };
+      if (payload.Resume_inc_rounds !== undefined && payload.Resume_inc_rounds !== null) {
+        calcInput.resume.inc_rounds_worked = payload.Resume_inc_rounds;
+      }
+      logger.log("TDCR resume request", { resume: calcInput.resume });
+    }
 
     // ── Steps 1 & 2: Calculator + Validator (with retry) ──────────
     let calcJson: any;
@@ -755,6 +802,47 @@ export const tdcrPipelineTask = task({
       return { status: "validation_failed", failed: validation.failed };
     }
 
+    // ── Resume review gate ────────────────────────────────────────
+    // A resume that could not be solved must NEVER reach the formatter. The
+    // calculator has already decided the remaining yoke cannot reach the
+    // target — rendering it anyway would send the knitter a pattern that
+    // silently does not fit, which is worse than sending nothing. Route to
+    // Yulia with the reason in words that can be forwarded to the knitter.
+    if (calcJson.resume_review_required === 1) {
+      logger.warn("TDCR resume needs manual review", {
+        reason: calcJson.resume_reason,
+        detail: calcJson.resume_detail,
+      });
+      await resend.emails.send({
+        from: fromEmail,
+        to: [adminEmail],
+        subject: `⚠️ TDCR resume needs review — ${payload.email || "no email"} — ${calcJson.resume_reason}`,
+        html: `
+          <h2>Resume could not be solved automatically</h2>
+          <p><strong>Run ID:</strong> ${ctx.run.id}</p>
+          <p><strong>Customer:</strong> ${payload.email || "no email"}</p>
+          <p><strong>Reason code:</strong> ${calcJson.resume_reason}</p>
+          <p><strong>What happened:</strong><br/>${calcJson.resume_detail}</p>
+          <h3>What the knitter reported</h3>
+          <ul>
+            <li>Rounds worked: ${payload.Resume_rounds_worked}</li>
+            <li>Sts on needle: ${payload.Resume_sts_on_needle}</li>
+            <li>Circumference: ${payload.Resume_circ_cm} cm</li>
+            <li>Depth: ${payload.Resume_depth_cm} cm</li>
+            <li>Increase rounds (their count): ${payload.Resume_inc_rounds ?? "not given"}</li>
+          </ul>
+          <h3>Their original order</h3>
+          <p>Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row
+             · ${payload.Ease_preference} · ${payload.Length_preference}
+             · Sleeve ${payload.Sleeve_length_cm}cm</p>
+          <p><strong>Measured gauge:</strong> ${calcJson.resume_gs} sts × ${calcJson.resume_gr} rows / 10 cm
+             (ordered at ${payload.Gauge_st} × ${payload.Gauge_row})</p>
+          <p>No pattern was generated and nothing was sent to the customer.</p>
+        `,
+      });
+      return { status: "resume_review", reason: calcJson.resume_reason, runId: ctx.run.id };
+    }
+
     // ── Step 3: Formatter — Pattern HTML ──────────────────────────
     // calcJson already contains pattern_type: "tdcr" (set by the calculator)
     // which routes the formatter to the TDCR KV keys.
@@ -812,12 +900,31 @@ export const tdcrPipelineTask = task({
     }
 
     // ── Step 8: Send pattern PDF to customer ──────────────────────
+    // A resume is a follow-up to a pattern the knitter already has, so the
+    // wording must make clear this replaces the yoke instructions rather than
+    // arriving as a fresh order they did not place.
+    const isResumeOut = calcJson.resume_ok === 1;
     if (payload.email) {
       await resend.emails.send({
         from: fromEmail,
         to: [payload.email],
-        subject: "Your personalised knitting pattern is ready 🧶",
-        html: `
+        subject: isResumeOut
+          ? "Your revised knitting pattern 🧶"
+          : "Your personalised knitting pattern is ready 🧶",
+        html: isResumeOut
+          ? `
+          <p>Hello,</p>
+          <p>Thank you for sending your measurements. Your revised pattern is attached.</p>
+          <p>It picks up from where you are — the yoke increase instructions replace
+             the ones in your original pattern from this point on, and the sleeve
+             section has been adjusted too. Everything you have already knitted stays
+             as it is.</p>
+          <p>Keep knitting at the same tension you have been using: the revised
+             numbers are built around it.</p>
+          <p>If anything is unclear, simply reply to this email.</p>
+          <p>Happy knitting!</p>
+        `
+          : `
           <p>Hello,</p>
           <p>Thank you for your order. Your personalised top-down raglan sweater pattern is attached as a PDF.</p>
           <p>If you have any questions, simply reply to this email.</p>
@@ -825,12 +932,12 @@ export const tdcrPipelineTask = task({
         `,
         attachments: [
           {
-            filename: `your-sweater-pattern.pdf`,
+            filename: isResumeOut ? `your-revised-pattern.pdf` : `your-sweater-pattern.pdf`,
             content: pdfBase64,
           },
         ],
       });
-      logger.log("TDCR Pattern PDF sent to customer", { to: payload.email });
+      logger.log("TDCR Pattern PDF sent to customer", { to: payload.email, resume: isResumeOut });
     }
 
     // ── Step 9: Send admin confirmation copy ──────────────────────
