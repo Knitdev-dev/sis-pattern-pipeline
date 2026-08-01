@@ -1183,11 +1183,33 @@ function extractTallyFields(payload: TallyWebhookPayload): any {
       "Construction_method": "construction_method",
       "Special details": "special_details",
       "Garment_type": "garment_type",
+      // ── Resume mode ──
+      // On the resume form the order details (bust, gauge, ease, length,
+      // sleeve, construction) arrive as HIDDEN fields, pre-filled from the
+      // link Yulia sends the knitter. The knitter only answers the five
+      // measurement questions below. This matters because the calculator is
+      // stateless — it re-derives the original pattern from the original
+      // inputs every time — so a mistyped gauge would silently produce a
+      // revision of the wrong sweater.
+      // Hidden fields on the resume form carry the original order. Their
+      // names are the URL query parameters in the prefilled link.
+      "bust": "Bust_cm",
+      "gauge_st": "Gauge_st",
+      "gauge_row": "Gauge_row",
+      "ease": "Ease_preference",
+      "length_pref": "Length_preference",
+      "sleeve_len": "Sleeve_length_cm",
+      "construction": "construction_method",
     };
 
     const numericFields = new Set([
       "Bust_cm", "Gauge_st", "Gauge_row",
       "Front_neck_depth_for_V_cm", "Sleeve_length_cm", "Upper_arm_cm",
+      // Resume measurements must be numbers: the completeness check in
+      // tdcrPipelineTask counts non-empty fields, and a stray string would
+      // pass that count but fail inside the calculator.
+      "Resume_rounds_worked", "Resume_sts_on_needle",
+      "Resume_circ_cm", "Resume_depth_cm", "Resume_inc_rounds",
     ]);
 
     for (const field of payload.data?.fields || []) {
@@ -1201,6 +1223,32 @@ function extractTallyFields(payload: TallyWebhookPayload): any {
       if (typeof val === "string") val = val.trim().toLowerCase();
       if (numericFields.has(key)) val = parseFloat(val);
       result[key] = val;
+    }
+
+    // ── Resume questions: keyword matching ──
+    // These five are matched on distinctive keywords rather than the exact
+    // question text. The wording is knitter-facing and will get edited for
+    // clarity; an exact-string map would break silently every time it is,
+    // and the failure would look like "the resume form stopped working"
+    // rather than "someone fixed a typo". Order matters: the first rule
+    // whose keywords all appear wins, so the more specific rules come first.
+    const resumeRules: Array<{ key: string; needles: string[] }> = [
+      { key: "Resume_inc_rounds",    needles: ["increase", "round"] },
+      { key: "Resume_rounds_worked", needles: ["round", "worked"] },
+      { key: "Resume_sts_on_needle", needles: ["stitch", "needle"] },
+      { key: "Resume_circ_cm",       needles: ["circumference"] },
+      { key: "Resume_depth_cm",      needles: ["depth"] },
+    ];
+    for (const field of payload.data?.fields || []) {
+      const label = (field.label || "").toLowerCase();
+      if (!label) continue;
+      for (const rule of resumeRules) {
+        if (result[rule.key] !== undefined) continue;   // already matched
+        if (!rule.needles.every((n) => label.includes(n))) continue;
+        const num = parseFloat(field.value);
+        if (Number.isFinite(num)) result[rule.key] = num;
+        break;
+      }
     }
 
     const isTdcr = result.construction_method === 'knitted in one piece, from the top down (seamless)';
