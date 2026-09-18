@@ -1205,7 +1205,7 @@ function extractTallyFields(payload: TallyWebhookPayload): any {
 
     const numericFields = new Set([
       "Bust_cm", "Gauge_st", "Gauge_row",
-      "Front_neck_depth_for_V_cm", "Sleeve_length_cm", "Upper_arm_cm",
+      "Front_neck_depth_for_V_cm", "Sleeve_length_cm", "Upper_arm_cm", "Armhole_cm",
       // Resume measurements must be numbers: the completeness check in
       // tdcrPipelineTask counts non-empty fields, and a stray string would
       // pass that count but fail inside the calculator.
