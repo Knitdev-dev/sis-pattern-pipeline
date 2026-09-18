@@ -966,6 +966,252 @@ export const tdcrPipelineTask = task({
   },
 });
 
+// briochePipelineTask -- add this to sis-pipeline-v5.ts, alongside
+// sisPipelineTask / sisCardiganPipelineTask / tdcrPipelineTask.
+//
+// This is a corrected rewrite: an earlier draft guessed at helper-function
+// signatures (waitForApproval, callWorker's return shape) that turned out
+// to be wrong once I could see tdcrPipelineTask's actual code. This version
+// matches it line-for-line in structure, adapted only where brioche
+// genuinely differs. Nothing here redefines callWorker / htmlToPdf /
+// waitForApproval / storePatternHtml / sendAlert / bufferToBase64 -- all
+// reused exactly as they already exist in this file.
+//
+// Three genuine differences from tdcrPipelineTask:
+//   1. neck_cm is fixed at 56cm -- not a Tally field, per the product
+//      decision (funnel neck sized to head circumference / stretch, not
+//      scaled to bust).
+//   2. The formatter call is NOT /output1 on the shared LLM-based
+//      FORMATTER_URL. It's a direct POST to our own brioche-formatter
+//      Worker (plain deterministic substitution, no LLM), payload shape
+//      { calcJson, template_key }, response shape { ok, html } or
+//      { ok: false, error, missing }.
+//   3. No /output23 calc-log call exists (that's the LLM formatter's
+//      job, and brioche's formatter is deterministic substitution only).
+//      calcLog is built inline instead, directly from calcJson -- a short,
+//      guaranteed-accurate summary rather than an LLM-generated one, and
+//      it costs no extra worker call.
+//
+// Known gap, stated plainly: sleeve_length_cm / body_length_cm don't exist
+// in the calculator yet (the sections below the underarm divide aren't
+// built). This task produces the yoke only -- neck through divide. Whether
+// a yoke-only PDF is shippable now or should wait is a product decision,
+// not something this code resolves either way.
+
+const BRIOCHE_NECK_CM = 56; // fixed -- see product decision, not from Tally
+
+export const briochePipelineTask = task({
+  id: "brioche-pipeline",
+  maxDuration: 1800,
+  retry: { maxAttempts: 2 },
+
+  run: async (payload: any, { ctx }) => {
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const adminEmail = process.env.ADMIN_EMAIL!;
+    const fromEmail = process.env.FROM_EMAIL!;
+
+    logger.log("Brioche pipeline started", {
+      bust: payload.Bust_cm,
+      email: payload.email,
+      runId: ctx.run.id,
+    });
+
+    // Translate Tally-format payload to brioche calculator format.
+    const calcInput = {
+      bust_cm: payload.Bust_cm,
+      upper_arm_cm: payload.Upper_arm_cm,
+      neck_cm: BRIOCHE_NECK_CM,
+      armhole_cm: payload.Armhole_cm,
+      gauge_sts: payload.Gauge_st,
+      gauge_rows: payload.Gauge_row,
+      fit: String(payload.Ease_preference ?? "").trim().toLowerCase(),
+    };
+
+    // ── Steps 1 & 2: Calculator + Validator (with retry) ──────────
+    let calcJson: any;
+    let validation: any;
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      logger.log(`Brioche Calculator attempt ${attempt}...`);
+      const calcResult = await callWorker(
+        process.env.BRIOCHE_CALCULATOR_URL!,
+        process.env.BRIOCHE_CALCULATOR_API_KEY!,
+        calcInput
+      );
+
+      if (calcResult.error || calcResult.data?.error) {
+        const msg = calcResult.error || calcResult.data?.error;
+        logger.error(`Brioche Calculator attempt ${attempt} failed`, { msg });
+        if (attempt === 3) {
+          await sendAlert(resend, fromEmail, adminEmail, "Brioche Calculator error", msg, payload);
+          throw new Error(`Brioche Calculator failed after 3 attempts: ${msg}`);
+        }
+        continue;
+      }
+
+      calcJson = calcResult.data;
+      logger.log(`Brioche Calculator attempt ${attempt} complete`, {
+        closure_checks: calcJson.closure_checks,
+      });
+
+      logger.log(`Brioche Validator attempt ${attempt}...`);
+      const validatorResult = await callWorker(
+        process.env.BRIOCHE_VALIDATOR_URL!,
+        process.env.BRIOCHE_VALIDATOR_API_KEY!,
+        calcJson
+      );
+
+      if (validatorResult.error) {
+        await sendAlert(resend, fromEmail, adminEmail, "Brioche Validator error", validatorResult.error, payload);
+        throw new Error(`Brioche Validator failed: ${validatorResult.error}`);
+      }
+
+      validation = validatorResult.data;
+      logger.log(`Brioche Validator attempt ${attempt} complete`, {
+        pass: validation.pass,
+        failed: validation.failed,
+      });
+
+      if (validation.pass) {
+        logger.log(`Brioche Validation passed on attempt ${attempt}`);
+        break;
+      }
+
+      logger.warn(`Brioche Validation failed on attempt ${attempt}`, { failed: validation.failed });
+
+      // Brioche calculator is deterministic -- retrying after a validation
+      // failure won't change the output. Fail fast, same as TDCR.
+      await sendAlert(
+        resend, fromEmail, adminEmail,
+        "Brioche Validation failed",
+        `Failed checks:\n${JSON.stringify(validation.failed, null, 2)}`,
+        payload
+      );
+      if (payload.email) {
+        await resend.emails.send({
+          from: fromEmail,
+          to: [payload.email],
+          subject: "Your knitting pattern — we're checking something",
+          html: `<p>Thank you for your order. We noticed a small issue with the calculations and our team will review and send your pattern shortly.</p>`,
+        });
+      }
+      return { status: "validation_failed", failed: validation.failed };
+    }
+
+    // ── Step 3: Formatter — Pattern HTML ──────────────────────────
+    // Direct call to our own deterministic formatter, not the shared
+    // LLM-based FORMATTER_URL /output1. template_key must match whatever
+    // key the brioche pattern template is actually stored under in
+    // SIS_TEMPLATES KV -- adjust if it differs. Requires SIS_TEMPLATES
+    // bound to the brioche-formatter Worker (Settings -> Bindings), a
+    // separate manual step this code doesn't create.
+    logger.log("Calling brioche-formatter...");
+    const formatResult = await callWorker(
+      process.env.BRIOCHE_FORMATTER_URL!,
+      process.env.BRIOCHE_FORMATTER_API_KEY!,
+      { calcJson, template_key: "brioche_pattern_template" }
+    );
+
+    if (formatResult.error || !formatResult.data?.ok) {
+      // A MISSING VALUE error here means a template placeholder has no
+      // matching calculator field -- a real bug, not a one-off input
+      // problem, so it's alerted distinctly from a generic error.
+      const msg = formatResult.error || formatResult.data?.error || "Formatter returned ok:false";
+      await sendAlert(resend, fromEmail, adminEmail, "Brioche Formatter error", msg, payload);
+      throw new Error(`Brioche Formatter failed: ${msg}`);
+    }
+
+    const patternHtml = formatResult.data.html;
+    logger.log("Brioche Pattern HTML generated", { chars: patternHtml.length });
+
+    // ── Step 3b: Store interactive web version (non-fatal) ────────
+    const patternUrl = await storePatternHtml(resend, fromEmail, adminEmail, patternHtml, payload);
+
+    // ── Step 4: Calculation log ────────────────────────────────────
+    // No LLM formatter step exists to generate this (brioche's formatter
+    // is plain substitution, not a model call), so it's built directly
+    // from calcJson instead -- short, and guaranteed to match the actual
+    // numbers since it's reading them, not summarising them.
+    const calcLog = [
+      `Cast-on: ${calcJson.total0_sts} sts (${calcJson.total0_ribs} ribs)`,
+      `Neck: ${calcJson.total1_sts} sts (${calcJson.total1_ribs} ribs)`,
+      `Blocks: ${calcJson.blocks_full} full + ${calcJson.blocks_light} light × ${calcJson.blocks_rows_each} rows`,
+      `Chevron starts at block ${calcJson.chevron_start_block}, ${calcJson.chevron_repeats} repeats`,
+      `Body-only cycles: ${calcJson.bodyonly_cycles}`,
+      `Finished bust: ${calcJson.finished_bust_cm} cm (target ${calcJson.bust_cm + calcJson.ease_cm} cm)`,
+      `Finished sleeve: ${calcJson.finished_sleeve_cm} cm`,
+      `Closure checks: ${JSON.stringify(calcJson.closure_checks)}`,
+      `Validation warnings: ${JSON.stringify(validation.warnings || [])}`,
+    ].join("\n");
+
+    // ── Step 5: Convert pattern HTML → PDF ────────────────────────
+    logger.log("Converting Brioche pattern to PDF...");
+    let pdfBuffer: ArrayBuffer;
+    try {
+      pdfBuffer = await htmlToPdf(patternHtml);
+    } catch (e: any) {
+      await sendAlert(resend, fromEmail, adminEmail, "Brioche PDF generation failed", e.message, payload);
+      throw e;
+    }
+    logger.log("Brioche PDF generated", { bytes: pdfBuffer.byteLength });
+
+    const pdfBase64 = bufferToBase64(pdfBuffer);
+
+    // ── Step 6/7: Approval gate — email Yulia, block until approved ──
+    const approved = await waitForApproval(resend, fromEmail, pdfBase64, "Brioche", payload, ctx.run.id, calcLog);
+    if (!approved) {
+      logger.log("Brioche pattern rejected — not sending to customer");
+      return { status: "rejected", runId: ctx.run.id };
+    }
+
+    // ── Step 8: Send pattern PDF to customer ──────────────────────
+    if (payload.email) {
+      await resend.emails.send({
+        from: fromEmail,
+        to: [payload.email],
+        subject: "Your personalised knitting pattern is ready 🧶",
+        html: `
+          <p>Hello,</p>
+          <p>Thank you for your order. Your personalised brioche pullover pattern is attached as a PDF.</p>
+          <p>If you have any questions, simply reply to this email.</p>
+          <p>Happy knitting!</p>
+        `,
+        attachments: [
+          {
+            filename: `your-brioche-pattern.pdf`,
+            content: pdfBase64,
+          },
+        ],
+      });
+      logger.log("Brioche Pattern PDF sent to customer", { to: payload.email });
+    }
+
+    // ── Step 9: Send admin confirmation copy ──────────────────────
+    await resend.emails.send({
+      from: fromEmail,
+      to: [adminEmail],
+      subject: `✅ Brioche Pattern SENT — ${payload.email || "no email"} — Bust ${payload.Bust_cm}cm`,
+      html: `
+        <h2>Brioche Pattern sent successfully</h2>
+        <p><strong>Run ID:</strong> ${ctx.run.id}</p>
+        <p><strong>Customer:</strong> ${payload.email || "no email"}</p>
+        <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Upper arm ${payload.Upper_arm_cm}cm · Armhole ${payload.Armhole_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row · ${payload.Ease_preference}</p>
+        <p><strong>Closure checks:</strong> ${JSON.stringify(calcJson.closure_checks)}</p>
+        <p><strong>Validation warnings:</strong> ${JSON.stringify(validation.warnings || [])}</p>
+      `,
+      attachments: [
+        {
+          filename: `brioche-pattern-${payload.Bust_cm}cm.pdf`,
+          content: pdfBase64,
+        },
+      ],
+    });
+
+    logger.log("Brioche Pipeline complete ✅");
+    return { status: "success", runId: ctx.run.id };
+  },
+});
+
 // ── Tally webhook handler task ───────────────────────────────────────
 
 export const tallyWebhookTask = task({
@@ -988,10 +1234,10 @@ export const tallyWebhookTask = task({
       construction: fields.construction_method,
     });
 
-    const isTdcr     = fields.construction_method === 'knitted in one piece, from the top down (seamless)';
+    const isBrioche  = typeof fields.garment_type === 'string' && fields.garment_type.includes('brioche');
+    const isTdcr     = !isBrioche && fields.construction_method === 'knitted in one piece, from the top down (seamless)';
     const isCardigan = typeof fields.garment_type === 'string' && fields.garment_type.includes('cardigan');
     const isSacasis  = !isTdcr && !isCardigan && typeof fields.special_details === 'string' && fields.special_details.includes('sand cable');
-
     // Variant precedence: cardigan > sacasis > sis. Cardigan and sacasis
     // are mutually exclusive in V1 (no sand-cable cardigan yet).
     if (isCardigan) {
@@ -1004,7 +1250,11 @@ export const tallyWebhookTask = task({
     // Cardigan is its own pipeline (different shape, different formatter
     // template) but shares calculator + validator workers via Variant.
     // SIS pullover is the default.
-    if (isTdcr) {
+    if (isBrioche) {
+    const handle = await briochePipelineTask.trigger(fields);
+    logger.log("Brioche pipeline triggered", { runId: handle.id });
+    return { status: "triggered", pipeline: "brioche", runId: handle.id };
+    } else if (isTdcr) {
       const handle = await tdcrPipelineTask.trigger(fields);
       logger.log("TDCR pipeline triggered", { runId: handle.id });
       return { status: "triggered", pipeline: "tdcr", runId: handle.id };
