@@ -1180,6 +1180,7 @@ function extractTallyFields(payload: TallyWebhookPayload): any {
       "Front_neck_depth_for_V_cm": "Front_neck_depth_for_V_cm",
       "Sleeve_length_cm": "Sleeve_length_cm",
       "Upper_arm_cm": "Upper_arm_cm",
+      "Armhole depth (cm)": "Armhole_cm",
       "Construction_method": "construction_method",
       "Special details": "special_details",
       "Garment_type": "garment_type",
