@@ -1502,14 +1502,17 @@ function extractTallyFields(payload: TallyWebhookPayload): any {
       }
     }
 
-    const isTdcr = result.construction_method === 'knitted in one piece, from the top down (seamless)';
+    const isBrioche = typeof result.garment_type === 'string' && result.garment_type.includes('brioche');
+    const isTdcr = !isBrioche && result.construction_method === 'knitted in one piece, from the top down (seamless)';
 
-    const required = isTdcr
+    const required = isBrioche
+      ? ["Bust_cm", "Gauge_st", "Gauge_row", "Ease_preference", "Upper_arm_cm", "Armhole_cm"]
+      : isTdcr
       ? ["Bust_cm", "Gauge_st", "Gauge_row", "Ease_preference", "Length_preference",
          "Sleeve_length_cm"]
       : ["Bust_cm", "Gauge_st", "Gauge_row", "Ease_preference", "Length_preference",
          "Front_neck_depth_for_V_cm", "Sleeve_length_cm"];
-
+    
     for (const r of required) {
       if (result[r] === undefined || result[r] === null || result[r] === "" || Number.isNaN(result[r])) {
         return { error: `Missing required field: ${r}` };
