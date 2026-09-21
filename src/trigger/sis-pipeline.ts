@@ -1435,7 +1435,6 @@ function extractTallyFields(payload: TallyWebhookPayload): any {
       "Construction_method": "construction_method",
       "Special details": "special_details",
       "Garment_type": "garment_type",
-      "Body length (cm)": "Body_length_cm",
       // ── Resume mode ──
       // On the resume form the order details (bust, gauge, ease, length,
       // sleeve, construction) arrive as HIDDEN fields, pre-filled from the
@@ -1508,7 +1507,7 @@ function extractTallyFields(payload: TallyWebhookPayload): any {
     const isTdcr = !isBrioche && result.construction_method === 'knitted in one piece, from the top down (seamless)';
 
     const required = isBrioche
-      ? ["Bust_cm", "Gauge_st", "Gauge_row", "Ease_preference", "Upper_arm_cm", "Armhole_cm"]
+      ? ["Bust_cm", "Gauge_st", "Gauge_row", "Ease_preference", "Upper_arm_cm", "Armhole_cm", "Body_length_cm", "Sleeve_length_cm"]
       : isTdcr
       ? ["Bust_cm", "Gauge_st", "Gauge_row", "Ease_preference", "Length_preference",
          "Sleeve_length_cm"]
