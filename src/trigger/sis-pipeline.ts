@@ -1429,11 +1429,13 @@ function extractTallyFields(payload: TallyWebhookPayload): any {
       "Length preference": "Length_preference",
       "Front_neck_depth_for_V_cm": "Front_neck_depth_for_V_cm",
       "Sleeve_length_cm": "Sleeve_length_cm",
+      "Body length (cm)": "Body_length_cm",
       "Upper_arm_cm": "Upper_arm_cm",
       "Armhole depth (cm)": "Armhole_cm",
       "Construction_method": "construction_method",
       "Special details": "special_details",
       "Garment_type": "garment_type",
+      "Body length (cm)": "Body_length_cm",
       // ── Resume mode ──
       // On the resume form the order details (bust, gauge, ease, length,
       // sleeve, construction) arrive as HIDDEN fields, pre-filled from the
@@ -1455,7 +1457,7 @@ function extractTallyFields(payload: TallyWebhookPayload): any {
 
     const numericFields = new Set([
       "Bust_cm", "Gauge_st", "Gauge_row",
-      "Front_neck_depth_for_V_cm", "Sleeve_length_cm", "Upper_arm_cm", "Armhole_cm",
+      "Front_neck_depth_for_V_cm", "Sleeve_length_cm", "Upper_arm_cm", "Armhole_cm", "Body_length_cm",
       // Resume measurements must be numbers: the completeness check in
       // tdcrPipelineTask counts non-empty fields, and a stray string would
       // pass that count but fail inside the calculator.
