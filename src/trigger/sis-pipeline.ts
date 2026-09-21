@@ -1022,6 +1022,8 @@ export const briochePipelineTask = task({
       upper_arm_cm: payload.Upper_arm_cm,
       neck_cm: BRIOCHE_NECK_CM,
       armhole_cm: payload.Armhole_cm,
+      body_length_cm: payload.Body_length_cm,
+      sleeve_length_cm: payload.Sleeve_length_cm,
       gauge_sts: payload.Gauge_st,
       gauge_rows: payload.Gauge_row,
       fit: String(payload.Ease_preference ?? "").trim().toLowerCase(),
