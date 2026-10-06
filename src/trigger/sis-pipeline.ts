@@ -60,6 +60,19 @@ interface TallyWebhookPayload {
   };
 }
 
+// ── TDCR routing rule ────────────────────────────────────────────────
+// Shared by tallyWebhookTask and extractTallyFields so the two can never
+// disagree. TDCR is selected EITHER by the construction answer OR by the
+// garment option itself (any option containing "raglan"). The garment
+// check matters because Construction_method is a hidden question filled
+// only by the website link — a knitter who opens Tally directly would
+// otherwise send an empty construction answer and fall through to SIS.
+function isTdcrOrder(f: any, isBrioche: boolean): boolean {
+  if (isBrioche) return false;
+  if (f.construction_method === 'knitted in one piece, from the top down (seamless)') return true;
+  return typeof f.garment_type === 'string' && f.garment_type.includes('raglan');
+}
+
 // ── SIS pipeline task ────────────────────────────────────────────────
 
 export const sisPipelineTask = task({
@@ -1234,10 +1247,11 @@ export const tallyWebhookTask = task({
       bust: fields.Bust_cm || fields.bust_cm,
       ease: fields.Ease_preference || fields.ease_preference,
       construction: fields.construction_method,
+      garment: fields.garment_type,
     });
 
     const isBrioche  = typeof fields.garment_type === 'string' && fields.garment_type.includes('brioche');
-    const isTdcr     = !isBrioche && fields.construction_method === 'knitted in one piece, from the top down (seamless)';
+    const isTdcr     = isTdcrOrder(fields, isBrioche);
     const isCardigan = typeof fields.garment_type === 'string' && fields.garment_type.includes('cardigan');
     const isSacasis  = !isTdcr && !isCardigan && typeof fields.special_details === 'string' && fields.special_details.includes('sand cable');
     // Variant precedence: cardigan > sacasis > sis. Cardigan and sacasis
@@ -1507,7 +1521,7 @@ function extractTallyFields(payload: TallyWebhookPayload): any {
     }
 
     const isBrioche = typeof result.garment_type === 'string' && result.garment_type.includes('brioche');
-    const isTdcr = !isBrioche && result.construction_method === 'knitted in one piece, from the top down (seamless)';
+    const isTdcr = isTdcrOrder(result, isBrioche);
 
     const required = isBrioche
       ? ["Bust_cm", "Gauge_st", "Gauge_row", "Ease_preference", "Upper_arm_cm", "Armhole_cm", "Body_length_cm", "Sleeve_length_cm"]
@@ -1516,7 +1530,7 @@ function extractTallyFields(payload: TallyWebhookPayload): any {
          "Sleeve_length_cm"]
       : ["Bust_cm", "Gauge_st", "Gauge_row", "Ease_preference", "Length_preference",
          "Front_neck_depth_for_V_cm", "Sleeve_length_cm"];
-    
+
     for (const r of required) {
       if (result[r] === undefined || result[r] === null || result[r] === "" || Number.isNaN(result[r])) {
         return { error: `Missing required field: ${r}` };
