@@ -1113,6 +1113,20 @@ export const briochePipelineTask = task({
       return { status: "validation_failed", failed: validation.failed };
     }
 
+    // ── Step 2b: Alert -- one-time increase on a marked sleeve rib ──
+    // For some sizes a sleeve's one-time increase lands ON the rib that
+    // carries M1/M2/M3/M4. The pattern still prints (template wording
+    // adapts), but where the marker should sit afterwards isn't decided
+    // yet -- so flag it to Yulia, non-blocking, before she approves.
+    if (calcJson.onetime_inc_on_marked_rib === 1) {
+      await sendAlert(
+        resend, fromEmail, adminEmail,
+        "Brioche: one-time increase on a marked sleeve rib",
+        `Marker placement after the one-time increase needs checking before approval. ${calcJson.onetime_marked_rib_detail || ""}`,
+        payload
+      );
+    }
+
     // ── Step 3: Formatter — Pattern HTML ──────────────────────────
     // Direct call to our own deterministic formatter, not the shared
     // LLM-based FORMATTER_URL /output1. template_key must match whatever
@@ -1157,6 +1171,7 @@ export const briochePipelineTask = task({
       `Finished sleeve: ${calcJson.finished_sleeve_cm} cm`,
       `Closure checks: ${JSON.stringify(calcJson.closure_checks)}`,
       `Validation warnings: ${JSON.stringify(validation.warnings || [])}`,
+      ...(calcJson.onetime_inc_on_marked_rib === 1 ? [`⚠ One-time increase on a marked sleeve rib -- check marker placement. ${calcJson.onetime_marked_rib_detail || ""}`] : []),
     ].join("\n");
 
     // ── Step 5: Convert pattern HTML → PDF ────────────────────────
