@@ -857,40 +857,42 @@ export const tdcrPipelineTask = task({
     }
 
     // ── Step 3: Formatter — Pattern HTML ──────────────────────────
-    // calcJson already contains pattern_type: "tdcr" (set by the calculator)
-    // which routes the formatter to the TDCR KV keys.
-    logger.log("Calling TDCR formatter /output1...");
-    const output1Result = await callWorker(
-      process.env.FORMATTER_URL! + "/output1",
-      process.env.FORMATTER_API_KEY!,
-      calcJson
+    // 2026-10-20: deterministic formatter (no AI writing step -- Ravelry
+    // no-AI rule). Reuses the brioche-formatter Worker, which is generic:
+    // [field] substitution + <!--TDCR_IF--> blocks, template read from
+    // SIS_TEMPLATES KV by key. Missing fields are a hard error.
+    logger.log("Calling deterministic formatter for TDCR...");
+    const formatResult = await callWorker(
+      process.env.BRIOCHE_FORMATTER_URL!,
+      process.env.BRIOCHE_FORMATTER_API_KEY!,
+      { calcJson, template_key: "tdcr_pattern_template" }
     );
 
-    if (output1Result.error || !output1Result.data?.output1) {
-      const msg = output1Result.error || "No output1 returned";
-      await sendAlert(resend, fromEmail, adminEmail, "TDCR Formatter output1 error", msg, payload);
-      throw new Error(`TDCR Formatter output1 failed: ${msg}`);
+    if (formatResult.error || !formatResult.data?.ok) {
+      const msg = formatResult.error || formatResult.data?.error || "Formatter returned ok:false";
+      await sendAlert(resend, fromEmail, adminEmail, "TDCR Formatter error", msg, payload);
+      throw new Error(`TDCR Formatter failed: ${msg}`);
     }
 
-    const patternHtml = output1Result.data.output1;
+    const patternHtml = formatResult.data.html;
     logger.log("TDCR Pattern HTML generated", { chars: patternHtml.length });
 
     // ── Step 3b: Store interactive web version (non-fatal) ────────
     const patternUrl = await storePatternHtml(resend, fromEmail, adminEmail, patternHtml, payload);
 
-    // ── Step 4: Formatter — Calculation Log only (no check sheet for TDCR) ──
-    logger.log("Calling TDCR formatter /output23 (log only)...");
-    const output23Result = await callWorker(
-      process.env.FORMATTER_URL! + "/output23",
-      process.env.FORMATTER_API_KEY!,
-      calcJson
-    );
-
-    const calcLog = output23Result.data?.output3 || null;
-
-    if (!calcLog) {
-      logger.warn("TDCR Calculation log not generated", { error: output23Result.error });
-    }
+    // ── Step 4: Calculation log, built straight from calcJson ─────
+    // (replaces the LLM /output23 call; same approach as brioche)
+    const calcLog = [
+      `Inputs: bust ${calcJson.bust_cm} cm, ease ${calcJson.ease_preference} (${calcJson.Ease_} cm), length ${calcJson.length_preference}, gauge ${calcJson.Gauge_sts} x ${calcJson.Gauge_rows}, sleeve ${calcJson.sleeve_length_cm} cm`,
+      `Chest ${calcJson.C_cm} cm, neck ${calcJson.neck_cm} cm, cast-on ${calcJson.N_sts} sts`,
+      `Y1 ${calcJson.Y1_rb}/${calcJson.Y1_slv}/${calcJson.Y1_f}/${calcJson.Y1_lb}; Y2 total ${calcJson.Y2_total}; Y4 total ${calcJson.Y4_total}`,
+      `Schedule: scenario ${calcJson.scenario}, raglan_pairs ${calcJson.raglan_pairs}, body-only ${calcJson.bop_rounds}, armhole ${calcJson.armhole_depth_cm} cm (${calcJson.armhole_depth_rows} rows)`,
+      `Divide: UA ${calcJson.UA}, body ${calcJson.B_sts} sts, sleeve ${calcJson.SL_sts} sts`,
+      `Sleeve: dec every ${calcJson.dec_every_nth_ordinal} x ${calcJson.dec_rounds}, cuff ${calcJson.CU_sts} sts (${calcJson.cuff_cm} cm)`,
+      `Finished: chest ${calcJson.finished_chest_cm} cm, upper arm ${calcJson.finished_upper_arm_cm} cm, body ${calcJson.body_length_cm} cm`,
+      `Checks: ${JSON.stringify(calcJson.checks || {})}`,
+      `Incompatibility: ${calcJson.incompatibility ?? "none"}${calcJson.error_detail ? " -- " + calcJson.error_detail : ""}`,
+    ].join("\n");
 
     // ── Step 5: Convert pattern HTML → PDF ────────────────────────
     logger.log("Converting TDCR pattern to PDF...");
