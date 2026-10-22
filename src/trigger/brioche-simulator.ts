@@ -162,8 +162,8 @@ export function simulate(html) {
   const printedBody = t.match(/Body length, measured from the mid-back below the funnel neck to the end of hem[\s\S]*?(\d+(?:\.\d+)?) cm/);
   if (printedBody) {
     const rounds = R - onetimeRound + 1;
-    checks.push({ ok: Math.abs(cm(rounds) - num(printedBody[1])) <= 3, warn: true, what: "body length (one-time increase round → end of hem) ≈ printed b", detail: `${rounds} rounds = ${cm(rounds)} cm, printed ${printedBody[1]} cm` });
-  }
+    ok(Math.abs(cm(rounds) - num(printedBody[1])) <= 0.05, "body length printed (b) = rounds knitted (one-time increase round → end of hem)", `${rounds} rounds = ${cm(rounds)} cm, printed ${printedBody[1]} cm`);
+  } else notUnderstood.push("printed body length b (finished measurements)");
 
   // ── sleeve ──
   const slStart = after("Right sleeve: starting the sleeve");
