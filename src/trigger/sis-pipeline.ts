@@ -1,3 +1,4 @@
+import { simulate } from "./brioche-simulator";
 import { task, logger, wait } from "@trigger.dev/sdk";
 import { Resend } from "resend";
 
@@ -1176,6 +1177,25 @@ export const briochePipelineTask = task({
       ...(calcJson.onetime_inc_on_marked_rib === 1 ? [`⚠ One-time increase on a marked sleeve rib -- check marker placement. ${calcJson.onetime_marked_rib_detail || ""}`] : []),
     ].join("\n");
 
+    // ── Step 4b: Knitting simulator (2026-10-21) ─────────────────
+    // Knits the finished pattern TEXT round by round (no access to the
+    // calculator) and compares every stitch count / round number it can
+    // re-derive with the printed one. Result goes into the approval email;
+    // it never blocks the order on its own -- Yulia decides.
+    let simLog = "";
+    try {
+      const sim = simulate(patternHtml);
+      const bad = sim.failed.map((c: any) => `❌ ${c.what}: ${c.detail}`);
+      const warn = sim.warnings.map((c: any) => `⚠ ${c.what}: ${c.detail}`);
+      const nu = sim.notUnderstood.map((x: string) => `❓ not understood: ${x}`);
+      simLog = sim.ok && warn.length === 0
+        ? `Knitting simulator: ✅ all ${sim.checks.length} checks passed`
+        : ["Knitting simulator: " + (sim.ok ? "✅ passed with warnings" : "❌ PROBLEMS FOUND"), ...bad, ...warn, ...nu].join("\n");
+    } catch (e: any) {
+      simLog = `Knitting simulator: ❓ crashed (${e.message}) -- check the PDF by hand`;
+    }
+    const calcLogWithSim = `${simLog}\n\n${calcLog}`;
+
     // ── Step 5: Convert pattern HTML → PDF ────────────────────────
     logger.log("Converting Brioche pattern to PDF...");
     let pdfBuffer: ArrayBuffer;
@@ -1190,7 +1210,7 @@ export const briochePipelineTask = task({
     const pdfBase64 = bufferToBase64(pdfBuffer);
 
     // ── Step 6/7: Approval gate — email Yulia, block until approved ──
-    const approved = await waitForApproval(resend, fromEmail, pdfBase64, "Brioche", payload, ctx.run.id, calcLog);
+    const approved = await waitForApproval(resend, fromEmail, pdfBase64, "Brioche", payload, ctx.run.id, calcLogWithSim);
     if (!approved) {
       logger.log("Brioche pattern rejected — not sending to customer");
       return { status: "rejected", runId: ctx.run.id };
