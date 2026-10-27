@@ -187,43 +187,49 @@ export function simulate(html) {
     SS += d; ok(SS === num(rb[2]), "sleeve set-up round B stitch count", `knitted ${SS}, printed ${rb[2]}`);
   }
   // motif
-  const mot = need(/You will work the sleeve motif (\d+) time/, "sleeve motif count");
+  const WORDS = { once: 1, twice: 2 };
+  const mot = need(/You will work the sleeve motif (once|twice|(\d+) times)/, "sleeve motif count");
+  if (/time\(s\)/.test(t)) notUnderstood.push("'time(s)' wording still in the pattern");
   const motifRounds = [...t.matchAll(/Round (1|7|21|27) \(BRK\): ([^\n]*)/g)];
   ok(motifRounds.length === 4, "4 motif shaping rounds found", `${motifRounds.length}`);
   motifRounds.forEach((m) => ok(delta(m[2]) === 0, `motif round ${m[1]} is stitch-neutral`, `delta ${delta(m[2])}`));
   const decAll = /Round 39 is a sleeve decrease round in every motif/.test(t);
   const decOnly = t.match(/Round 39 is a sleeve decrease round in motif No ([\d ,and]+?) only/);
   const r39 = t.match(/Round 39 \(BRK\), sleeve decrease: ([^\n]*)/);
-  const nMot = mot ? num(mot[1]) : NaN;
+  const nMot = mot ? (WORDS[mot[1]] || num(mot[2])) : NaN;
   let nDec = 0;
   if (decAll) nDec = nMot; else if (decOnly) nDec = decOnly[1].split(/,|and/).filter((x) => x.trim()).length;
   if (r39) SS += nDec * delta(r39[1].replace(/— \d+ sts decreased\./, ""));
-  SR = 2 + 40 * nMot;
-  const endMot = need(/are at round (\d+) of the sleeve/, "round after the motifs");
-  if (endMot) ok(num(endMot[1]) === SR, "round after the motifs", `knitted ${SR}, printed ${endMot[1]}`);
-  const afterMot = need(/are at round \d+ of the sleeve\.\n\s*Stitch count\s+(\d+) sts/, "stitch count after motifs");
+  SR = 2 + 40 * nMot; // absolute sleeve round, tracked internally; the pattern numbers each section from 1 (2026-10-27)
+  const worked = need(/You have worked the motif (once|twice|(\d+) times)\./, "motifs worked");
+  if (worked) ok((WORDS[worked[1]] || num(worked[2])) === nMot, "motifs worked = motifs announced", `${worked[1]} vs ${nMot}`);
+  const afterMot = need(/You have worked the motif [^\n]*\n\s*Stitch count\s+(\d+) sts/, "stitch count after motifs");
   if (afterMot) ok(SS === num(afterMot[1]), "stitch count after the motifs", `knitted ${SS}, printed ${afterMot[1]}`);
-  const plain = t.match(/Rounds (\d+)–(\d+): work (\d+) rounds in brioche\./);
-  if (plain) { ok(num(plain[1]) === SR + 1, "sleeve plain rounds follow the motifs", `${plain[1]} vs ${SR + 1}`); ok(num(plain[2]) - num(plain[1]) + 1 === num(plain[3]), "plain round range = count"); SR = num(plain[2]); }
-  const two = need(/Final decreases\n\s*Work 2 rounds in brioche\./, "final decreases: 2 plain rounds");
-  if (two) SR += 2;
-  const extra = t.match(/Round (\d+) \(BRK\), sleeve decrease: work as round 39 of the motif — 4 sts decreased\. Work 3 rounds in brioche\./);
-  if (extra) { SR += 1; ok(num(extra[1]) === SR && odd(SR), "extra sleeve decrease round number", `${extra[1]} vs ${SR}`); SS -= 4; SR += 3; }
+  // every section from here starts on a BRK round: absolute round SR+1 must be odd
+  const secStart = (name) => ok(odd(SR + 1), `${name} starts on a BRK round`, `absolute round ${SR + 1}`);
+  const plain = t.match(/Rounds 1–(\d+): work in brioche\./);
+  if (plain) { secStart("plain rounds"); ok(num(plain[1]) % 2 === 0, "plain rounds: even count (next section starts on BRK)", plain[1]); SR += num(plain[1]); }
+  const two = need(/Final decreases\n\s*Rounds 1–2: work in brioche\./, "final decreases: rounds 1–2");
+  if (two) { secStart("final decreases"); }
+  const secBase = SR; if (two) SR += 2;
+  const extra = t.match(/Round 3 \(BRK\), sleeve decrease: work as round 39 of the motif — 4 sts decreased\. Rounds 4–6: work in brioche\./);
+  if (extra) { SR += 1; ok(odd(SR - secBase) && odd(SR), "extra sleeve decrease is a BRK round", `section round ${SR - secBase}`); SS -= 4; SR += 3; }
   const fin = need(/Round (\d+) \(BRK\), final decrease round: ([^\n]*)/, "final decrease round");
   if (fin) {
-    SR += 1; ok(num(fin[1]) === SR && odd(SR), "final decrease round number (BRK)", `printed ${fin[1]}, knitted ${SR}`);
+    SR += 1; ok(num(fin[1]) === SR - secBase && odd(SR), "final decrease round number (BRK, section-relative)", `printed ${fin[1]}, knitted section round ${SR - secBase}`);
     SS += delta(fin[2].replace(/— \d+ sts decreased\./, ""));
   }
-  const finCount = need(/final decrease round:[^\n]*\n(?:[^\n]*BRP round[^\n]*\n)?\s*Stitch count\s+(\d+) sts/, "stitch count after the final decrease");
+  const brp = need(/Round (\d+) \(BRP\): work a BRP round\./, "BRP round after the final decrease");
+  if (brp) { SR += 1; ok(num(brp[1]) === SR - secBase && !odd(SR), "BRP round after the final decrease", `printed ${brp[1]}, knitted section round ${SR - secBase}`); }
+  const finCount = need(/work a BRP round\.\n\s*Stitch count\s+(\d+) sts/, "stitch count after the final decrease");
   if (finCount) ok(SS === num(finCount[1]), "stitch count after the final decrease", `knitted ${SS}, printed ${finCount[1]}`);
-  if (/Next round: work a BRP round\./.test(after("final decrease round"))) SR += 1;
-  const cuff = need(/Starting with round (\d+), work (\d+) rounds \((\d+(?:\.\d+)?) cm\)/, "cuff");
+  const cuff = need(/Work (\d+) rounds \((\d+(?:\.\d+)?) cm\) in half-twisted rib:/, "cuff");
   if (cuff) {
-    ok(num(cuff[1]) === SR + 1, "cuff starts on the next round", `printed ${cuff[1]}, knitted ${SR + 1}`);
-    ok(odd(num(cuff[1])), "cuff starts after a BRP round (first cuff round is odd)", `round ${cuff[1]}`);
-    SR = num(cuff[1]) + num(cuff[2]) - 1;
-    const end = t.match(/ending with round (\d+)|End with round (\d+)/i);
-    if (end) ok(num(end[1] || end[2]) === SR, "cuff last round", `printed ${end[1] || end[2]}, knitted ${SR}`);
+    secStart("cuff");
+    const r2 = t.match(/Rounds 2–(\d+): \*k1 tbl, p1\*/);
+    ok(!!/Round 1: \*k1 \(the slipped stitch together with its yarnover\), p1\*/.test(t), "cuff round 1 closes the yarnovers");
+    if (r2) ok(num(r2[1]) === num(cuff[1]), "cuff rounds 2–N end at the cuff count", `${r2[1]} vs ${cuff[1]}`); else notUnderstood.push("cuff rounds 2–N");
+    SR += num(cuff[1]);
   }
   const slen = need(/The sleeve measures approximately (\d+(?:\.\d+)?) cm from the underarm/, "sleeve length");
   if (slen) ok(Math.abs(cm(SR) - num(slen[1])) <= 0.05, "sleeve length printed = rounds knitted", `${SR} rounds = ${cm(SR)} cm, printed ${slen[1]} cm`);
