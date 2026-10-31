@@ -157,8 +157,11 @@ export function simulate(html) {
     const diff = Math.abs(cm(rounds) - num(bodyMeasure[1]));
     checks.push({ ok: diff <= 0.5, warn: true, what: "body length below the underarm printed ≈ rounds knitted", detail: `${rounds} rounds = ${cm(rounds)} cm, printed ${bodyMeasure[1]} cm` });
   }
-  const hem = need(/Work (\d+) rounds \((\d+(?:\.\d+)?) cm\) in honeycomb brioche/, "hem");
-  if (hem) { ok(num(hem[1]) % 2 === 0, "hem ends on a BRP round (even count)", hem[1]); R += num(hem[1]); }
+  // 2026-10-31: honeycomb hem, 4-round repeat, total a multiple of 4 ending with Round 4
+  const hem = need(/Work the hem in honeycomb brioche \(see Techniques\), (\d+) rounds in total \(about (\d+(?:\.\d+)?) cm\)/, "hem");
+  if (hem) { ok(num(hem[1]) % 4 === 0, "hem rounds are a multiple of 4 (ends with Round 4)", hem[1]); R += num(hem[1]); }
+  const hemRep = t.match(/until you have worked (\d+) rounds, ending with Round 4\./);
+  if (hem) ok(!!hemRep && hemRep[1] === hem[1], "hem repeat line gives the same round count", hemRep ? hemRep[1] : "missing");
   const printedBody = t.match(/Body length, measured from the mid-back below the funnel neck to the end of hem[\s\S]*?(\d+(?:\.\d+)?) cm/);
   if (printedBody) {
     const rounds = R - onetimeRound + 1;
