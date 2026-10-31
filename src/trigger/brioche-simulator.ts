@@ -187,8 +187,8 @@ export function simulate(html) {
     SS += d; ok(SS === num(rb[2]), "sleeve set-up round B stitch count", `knitted ${SS}, printed ${rb[2]}`);
   }
   // motif
-  const WORDS = { once: 1, twice: 2 };
-  const mot = need(/You will work the sleeve motif (once|twice|(\d+) times)/, "sleeve motif count");
+  const WORDS = { once: 1, twice: 2, "three times": 3 };
+  const mot = need(/You will work the sleeve motif (once|twice|three times|(\d+) times)/, "sleeve motif count");
   if (/time\(s\)/.test(t)) notUnderstood.push("'time(s)' wording still in the pattern");
   const motifRounds = [...t.matchAll(/Round (1|7|21|27) \(BRK\): ([^\n]*)/g)];
   ok(motifRounds.length === 4, "4 motif shaping rounds found", `${motifRounds.length}`);
@@ -201,15 +201,16 @@ export function simulate(html) {
   if (decAll) nDec = nMot; else if (decOnly) nDec = decOnly[1].split(/,|and/).filter((x) => x.trim()).length;
   if (r39) SS += nDec * delta(r39[1].replace(/— \d+ sts decreased\./, ""));
   SR = 2 + 40 * nMot; // absolute sleeve round, tracked internally; the pattern numbers each section from 1 (2026-10-27)
-  const worked = need(/You have worked the motif (once|twice|(\d+) times)\./, "motifs worked");
-  if (worked) ok((WORDS[worked[1]] || num(worked[2])) === nMot, "motifs worked = motifs announced", `${worked[1]} vs ${nMot}`);
-  const afterMot = need(/You have worked the motif [^\n]*\n\s*Stitch count\s+(\d+) sts/, "stitch count after motifs");
+  // 2026-10-31: "Repeat Rounds 1–40 until you have worked the motif twice|three times|N times in total." (R>1) or "You have worked the motif once." (R=1)
+  const worked = need(/(?:Repeat Rounds 1–40 until you have worked the motif (twice|three times|(\d+) times) in total|You have worked the motif (once))\./, "motifs worked");
+  if (worked) { const w = worked[3] || worked[1]; ok((WORDS[w] || num(worked[2])) === nMot, "motifs worked = motifs announced", `${w} vs ${nMot}`); }
+  const afterMot = need(/(?:in total|You have worked the motif once)\.\n\s*Stitch count\s+(\d+) sts/, "stitch count after motifs");
   if (afterMot) ok(SS === num(afterMot[1]), "stitch count after the motifs", `knitted ${SS}, printed ${afterMot[1]}`);
   // every section from here starts on a BRK round: absolute round SR+1 must be odd
   const secStart = (name) => ok(odd(SR + 1), `${name} starts on a BRK round`, `absolute round ${SR + 1}`);
   const plain = t.match(/Rounds 1–(\d+): work in brioche\./);
   if (plain) { secStart("plain rounds"); ok(num(plain[1]) % 2 === 0, "plain rounds: even count (next section starts on BRK)", plain[1]); SR += num(plain[1]); }
-  const two = need(/Final decreases\n\s*Rounds 1–2: work in brioche\./, "final decreases: rounds 1–2");
+  const two = need(/Final decreases?\n\s*Rounds 1–2: work in brioche\./, "final decrease: rounds 1–2");
   if (two) { secStart("final decreases"); }
   const secBase = SR; if (two) SR += 2;
   const extra = t.match(/Round 3 \(BRK\), sleeve decrease: work as round 39 of the motif — 4 sts decreased\. Rounds 4–6: work in brioche\./);
