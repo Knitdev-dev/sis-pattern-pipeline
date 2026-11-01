@@ -68,7 +68,7 @@ interface TallyWebhookPayload {
 // check matters because Construction_method is a hidden question filled
 // only by the website link — a knitter who opens Tally directly would
 // otherwise send an empty construction answer and fall through to SIS.
-function isTdcrOrder(f: any, isBrioche: boolean): boolean {
+export function isTdcrOrder(f: any, isBrioche: boolean): boolean {
   if (isBrioche) return false;
   if (f.construction_method === 'knitted in one piece, from the top down (seamless)') return true;
   return typeof f.garment_type === 'string' && f.garment_type.includes('raglan');
@@ -1465,7 +1465,7 @@ function bufferToBase64(buffer: ArrayBuffer): string {
 
 // ── Field extraction ──────────────────────────────────────────────────
 
-function extractTallyFields(payload: TallyWebhookPayload): any {
+export function extractTallyFields(payload: TallyWebhookPayload): any {
   try {
     const result: any = {};
 
