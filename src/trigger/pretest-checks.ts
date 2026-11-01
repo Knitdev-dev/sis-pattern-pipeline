@@ -46,7 +46,7 @@ const REQUIRED_OPTIONS = ["raglan", "brioche", "close", "relaxed", "oversized", 
 
 const BRIOCHE_SIZES = [
   { bust_cm: 97, upper_arm_cm: 35, neck_cm: 56, armhole_cm: 25.5, body_length_cm: 60, sleeve_length_cm: 43, gauge_sts: 14, gauge_rows: 40, fit: "relaxed" },
-  { bust_cm: 140, upper_arm_cm: 45, neck_cm: 56, armhole_cm: 28, body_length_cm: 66, sleeve_length_cm: 46, gauge_sts: 18, gauge_rows: 44, fit: "close" },
+  { bust_cm: 140, upper_arm_cm: 45, neck_cm: 56, armhole_cm: 28, body_length_cm: 66, sleeve_length_cm: 46, gauge_sts: 16, gauge_rows: 44, fit: "close" },
 ];
 const TDCR_SIZES = [
   { bust_cm: 97, gauge_sts: 22, gauge_rows: 30, ease_preference: "relaxed", length_preference: "standard", sleeve_length_cm: 45 },
