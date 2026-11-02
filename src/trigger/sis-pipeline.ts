@@ -1043,6 +1043,8 @@ export const briochePipelineTask = task({
       gauge_sts: payload.Gauge_st,
       gauge_rows: payload.Gauge_row,
       fit: String(payload.Ease_preference ?? "").trim().toLowerCase(),
+      // 2026-11-01: only used to prefill the checkpoint box's resume-form link.
+      email: payload.email ?? "",
     };
 
     // ── Steps 1 & 2: Calculator + Validator (with retry) ──────────
