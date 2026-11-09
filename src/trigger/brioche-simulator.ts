@@ -157,31 +157,25 @@ export function simulate(html) {
     const diff = Math.abs(cm(rounds) - num(bodyMeasure[1]));
     checks.push({ ok: diff <= 0.5, warn: true, what: "body length below the underarm printed ≈ rounds knitted", detail: `${rounds} rounds = ${cm(rounds)} cm, printed ${bodyMeasure[1]} cm` });
   }
-  // 2026-11-04: decrease round before the hem (optional block)
-  const hd = t.match(/Decrease round \(BRK round\): ([^\n]*?)\. You have decreased (\d+) ribs \((\d+) sts\): (\d+) sts \((\d+) ribs\) remain\./);
+  // 2026-11-09: hem decreases = p2tog on honeycomb Round 1 (purl); no extra rounds
+  const hd = t.match(/Round 1 \(first time, with decreases\): ([^\n]*?)\. On this round, purl each slipped stitch together with its yarnover[^\n]*?You have decreased (\d+) sts: (\d+) sts remain\./);
   if (hd) {
-    R += 1; ok(odd(R), "hem decrease round is a BRK round", `round ${R}`);
-    const seq = hd[1];
-    // expand "(...) N times" groups
-    const expanded = seq.replace(/\(([^()]*)\) (\d+) times/g, (_, x, n) => Array(num(n)).fill(x).join(", "));
-    let ribsIn = 0, decs = 0, rights = 0, lefts = 0; const order = [];
+    const expanded = hd[1].replace(/\(([^()]*)\) (\d+) times/g, (_, x, n) => Array(num(n)).fill(x).join(", "));
+    let stsIn = 0, decs = 0; const order = [];
     for (const part of expanded.split(/,\s*/)) {
       let m;
-      if ((m = part.match(/work in brioche (\d+) ribs?/i))) { ribsIn += num(m[1]); order.push(num(m[1])); }
-      else if ((m = part.match(/(right|left)-leaning brioche decrease/))) { decs++; ribsIn += 2; m[1] === "right" ? rights++ : lefts++; order.push(m[1] === "right" ? "R" : "L"); }
-      else if (/^sl1yo$/.test(part.trim())) { /* second half of the decrease's 2 ribs */ }
+      if ((m = part.trim().match(/^p(\d+)$/))) { stsIn += num(m[1]); order.push(num(m[1])); }
+      else if (/^p2tog$/.test(part.trim())) { decs++; stsIn += 2; order.push("D"); }
       else if (part.trim()) notUnderstood.push(`hem decrease part: ${part}`);
     }
-    const bodyRibs = div ? num(div[8]) / 2 : NaN;
-    ok(ribsIn === bodyRibs, "hem decrease round covers every body rib once", `${ribsIn} ribs worked, body has ${bodyRibs}`);
-    ok(decs === num(hd[2]) && num(hd[3]) === 2 * decs, "hem decrease count printed = decreases worked", `${decs} worked, printed ${hd[2]} ribs / ${hd[3]} sts`);
-    ok(decs % 2 === 0 && rights === lefts, "hem decreases even, half right- and half left-leaning", `${rights} right / ${lefts} left`);
-    ok(bodyRibs - decs === num(hd[5]) && num(hd[4]) === 2 * num(hd[5]), "ribs after hem decrease", `${bodyRibs} − ${decs} = ${bodyRibs - decs}, printed ${hd[5]} ribs / ${hd[4]} sts`);
-    const rev = order.slice().reverse().map((x) => (x === "R" ? "L" : x === "L" ? "R" : x));
-    ok(JSON.stringify(rev) === JSON.stringify(order), "hem decreases mirrored about centre back / centre front", order.join(" "));
-    const pct = decs / bodyRibs;
-    checks.push({ ok: pct >= 0.11 && pct <= 0.16, warn: true, what: "hem decrease about 12–15% of the body ribs", detail: `${(pct * 100).toFixed(1)}%` });
-    if (/Next round \(BRP round\): work in brioche to the end of the round\./.test(t)) R += 1; else notUnderstood.push("BRP round after the hem decrease");
+    const bodySts = div ? num(div[8]) : NaN;
+    ok(stsIn === bodySts, "hem Round 1 covers every body stitch once", `${stsIn} sts worked, body has ${bodySts}`);
+    ok(decs === num(hd[2]), "hem decrease count printed = p2tog worked", `${decs} worked, printed ${hd[2]}`);
+    ok(decs % 2 === 0, "hem decreases even (mirrored halves)", `${decs}`);
+    ok(bodySts - decs === num(hd[3]) && num(hd[3]) % 2 === 0, "sts after hem decrease, even for honeycomb", `${bodySts} − ${decs} = ${bodySts - decs}, printed ${hd[3]}`);
+    ok(JSON.stringify(order.slice().reverse()) === JSON.stringify(order), "hem decreases mirrored about centre back / centre front", order.join(" "));
+    const pct = decs / bodySts;
+    checks.push({ ok: pct >= 0.11 && pct <= 0.16, warn: true, what: "hem decrease about 12–15% of the body stitches", detail: `${(pct * 100).toFixed(1)}%` });
   }
   // 2026-10-31: honeycomb hem, 4-round repeat, total a multiple of 4 ending with Round 4
   const hem = need(/Work the hem in honeycomb brioche \(see Techniques\), (\d+) rounds in total \(about (\d+(?:\.\d+)?) cm\)/, "hem");
