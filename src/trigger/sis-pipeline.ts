@@ -1348,6 +1348,45 @@ function patternFileName(label: string, payload: any, revised = false): string {
 // the run until she clicks one (via the sis-approval worker completing the
 // waitpoint token). Returns true if approved, false if rejected/timed out.
 
+// ── Auto-send guards (2026-11-09) ────────────────────────────────────
+// Patterns go to the customer automatically unless a guard trips; then
+// the old approval email is used. Every auto-sent pattern is copied to
+// Yulia (subject "✅ AUTO-SENT") for the daily review.
+// Kill switch: set env AUTO_SEND=off in Trigger.dev to require approval
+// for every order again.
+async function emailDomainAcceptsMail(email: string): Promise<boolean> {
+  const m = /^[^\s@]+@([^\s@]+\.[a-z]{2,})$/i.exec(String(email || "").trim());
+  if (!m) return false;
+  const domain = m[1].toLowerCase();
+  try {
+    const { resolveMx, resolve4 } = await import("node:dns/promises");
+    const mx = await resolveMx(domain).catch(() => []);
+    if (mx.length > 0) return true;
+    const a = await resolve4(domain).catch(() => []);
+    return a.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+async function autoSendHoldReasons(label: string, payload: any, calcLog: string | null): Promise<string[]> {
+  const reasons: string[] = [];
+  const n = (x: any) => Number(x);
+  if (!(await emailDomainAcceptsMail(payload.email))) reasons.push(`email looks invalid (${payload.email || "none"})`);
+  const st = n(payload.Gauge_st), rw = n(payload.Gauge_row);
+  if (label === "Brioche") {
+    if (rw < 2 * st) reasons.push(`brioche rows ${rw} < 2 × sts ${st} (probably not doubled)`);
+    const bust = n(payload.Bust_cm), ua = n(payload.Upper_arm_cm);
+    if (bust && ua && ua / bust > 0.45) reasons.push(`upper arm ${ua} cm is large for bust ${bust} cm`);
+    if (!String(calcLog || "").startsWith("Knitting simulator: ✅ all")) reasons.push("knitting simulator not all green");
+  } else if (st && rw && rw < st) {
+    reasons.push(`row gauge ${rw} < stitch gauge ${st}`);
+  }
+  if (n(payload.Sleeve_length_cm) > 52) reasons.push(`sleeve ${payload.Sleeve_length_cm} cm is long`);
+  if (n(payload.Bust_cm) >= 150) reasons.push(`bust ${payload.Bust_cm} cm at the form maximum`);
+  return reasons;
+}
+
 async function waitForApproval(
   resend: Resend,
   fromEmail: string,
@@ -1357,6 +1396,38 @@ async function waitForApproval(
   runId: string,
   calcLog: string | null
 ): Promise<boolean> {
+  const autoSendOn = String(process.env.AUTO_SEND || "on").toLowerCase() !== "off";
+  let reasons: string[] = [];
+  try {
+    reasons = await autoSendHoldReasons(label, payload, calcLog);
+  } catch (e: any) {
+    reasons = [`guard check crashed: ${e.message}`];
+  }
+
+  if (autoSendOn && reasons.length === 0) {
+    try {
+      await resend.emails.send({
+        from: fromEmail,
+        to: ["yulia@knitpage.com"],
+        subject: `✅ AUTO-SENT — ${label} — ${payload.email || "no email"} — Bust ${payload.Bust_cm}cm`,
+        html: `
+          <h2>Pattern sent automatically (all guards passed)</h2>
+          <p><strong>Customer:</strong> ${payload.email || "no email"}</p>
+          <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row · ${payload.Ease_preference} · ${payload.Length_preference}</p>
+          <p><strong>Run ID:</strong> ${runId}</p>
+          <hr>
+          <pre style="font-size:11px;background:#f5f5f5;padding:12px;white-space:pre-wrap">${calcLog || "not generated"}</pre>
+        `,
+        attachments: [{ filename: patternFileName(label, payload), content: pdfBase64 }],
+      });
+    } catch (e: any) {
+      logger.warn("Auto-send review copy failed (non-fatal)", { err: e.message });
+    }
+    logger.log("Auto-send: guards passed, sending without approval", { label, runId });
+    return true;
+  }
+  logger.log("Auto-send: holding for approval", { autoSendOn, reasons });
+
   const token = await wait.createToken({ timeout: "7d" });
   const base = process.env.APPROVAL_URL!;
   const approveUrl = `${base}/approve?tokenId=${token.id}&action=approve`;
@@ -1368,6 +1439,7 @@ async function waitForApproval(
     subject: `🔍 APPROVAL NEEDED — ${label} — ${payload.email || "no email"} — Bust ${payload.Bust_cm}cm`,
     html: `
       <h2>Pattern ready for approval</h2>
+      <p style="background:#fff7ed;padding:8px"><strong>Held because:</strong> ${reasons.length ? reasons.join("; ") : "auto-send is switched off (AUTO_SEND=off)"}</p>
       <p><strong>Customer:</strong> ${payload.email || "no email"}</p>
       <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row · ${payload.Ease_preference} · ${payload.Length_preference}</p>
       <p><strong>Run ID:</strong> ${runId}</p>
