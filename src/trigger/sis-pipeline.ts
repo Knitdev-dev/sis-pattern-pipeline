@@ -1125,7 +1125,10 @@ export const briochePipelineTask = task({
     // carries M1/M2/M3/M4. The pattern still prints (template wording
     // adapts), but where the marker should sit afterwards isn't decided
     // yet -- so flag it to Yulia, non-blocking, before she approves.
-    if (calcJson.onetime_inc_on_marked_rib === 1) {
+    // 2026-11-09: cases 1 and 2 are now explained in the template ("Moving the
+    // markers" box), so they no longer alert or hold. Anything else (case 3,
+    // or an older calculator without onetime_marker_case) still does.
+    if (calcJson.onetime_inc_on_marked_rib === 1 && ![1, 2].includes(Number(calcJson.onetime_marker_case))) {
       await sendAlert(
         resend, fromEmail, adminEmail,
         "Brioche: one-time increase on a marked sleeve rib",
