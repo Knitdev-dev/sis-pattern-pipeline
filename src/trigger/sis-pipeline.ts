@@ -326,7 +326,7 @@ export const sisPipelineTask = task({
         `,
         attachments: [
           {
-            filename: `your-sweater-pattern.pdf`,
+            filename: patternFileName("SIS", payload),
             content: pdfBase64,
           },
         ],
@@ -349,7 +349,7 @@ export const sisPipelineTask = task({
       `,
       attachments: [
         {
-          filename: `pattern-${payload.Bust_cm}cm.pdf`,
+          filename: patternFileName("SIS", payload),
           content: pdfBase64,
         },
       ],
@@ -640,7 +640,7 @@ export const sisCardiganPipelineTask = task({
         `,
         attachments: [
           {
-            filename: `your-cardigan-pattern.pdf`,
+            filename: patternFileName("Cardigan", payload),
             content: pdfBase64,
           },
         ],
@@ -668,7 +668,7 @@ export const sisCardiganPipelineTask = task({
       `,
       attachments: [
         {
-          filename: `cardigan-pattern-${payload.Bust_cm}cm.pdf`,
+          filename: patternFileName("Cardigan", payload),
           content: pdfBase64,
         },
       ],
@@ -948,7 +948,7 @@ export const tdcrPipelineTask = task({
         `,
         attachments: [
           {
-            filename: isResumeOut ? `your-revised-pattern.pdf` : `your-sweater-pattern.pdf`,
+            filename: patternFileName("TDCR", payload, isResumeOut),
             content: pdfBase64,
           },
         ],
@@ -971,7 +971,7 @@ export const tdcrPipelineTask = task({
       `,
       attachments: [
         {
-          filename: `tdcr-pattern-${payload.Bust_cm}cm.pdf`,
+          filename: patternFileName("TDCR", payload, calcJson.resume_ok === 1),
           content: pdfBase64,
         },
       ],
@@ -1232,7 +1232,7 @@ export const briochePipelineTask = task({
         `,
         attachments: [
           {
-            filename: `your-brioche-pattern.pdf`,
+            filename: patternFileName("Brioche", payload),
             content: pdfBase64,
           },
         ],
@@ -1255,7 +1255,7 @@ export const briochePipelineTask = task({
       `,
       attachments: [
         {
-          filename: `brioche-pattern-${payload.Bust_cm}cm.pdf`,
+          filename: patternFileName("Brioche", payload),
           content: pdfBase64,
         },
       ],
@@ -1325,6 +1325,24 @@ export const tallyWebhookTask = task({
   },
 });
 
+// ── PDF file names (2026-11-09) ───────────────────────────────────────
+// One descriptive name for both the approval preview and the customer copy,
+// e.g. Knitpage_BriocheRaglan_92cm_20x45_relaxed.pdf, so orders with the same
+// bust can be told apart at a glance.
+const PDF_KIND: Record<string, string> = {
+  SIS: "SetInSweater", Cardigan: "Cardigan", TDCR: "RoundNeckRaglan", Brioche: "BriocheRaglan",
+};
+function patternFileName(label: string, payload: any, revised = false): string {
+  const clean = (v: any) => String(v ?? "").trim().replace(/[^A-Za-z0-9.]+/g, "");
+  const parts = ["Knitpage", PDF_KIND[label] || clean(label)];
+  if (clean(payload?.Bust_cm)) parts.push(`${clean(payload.Bust_cm)}cm`);
+  if (clean(payload?.Gauge_st) || clean(payload?.Gauge_row)) parts.push(`${clean(payload?.Gauge_st)}x${clean(payload?.Gauge_row)}`);
+  if (clean(payload?.Ease_preference)) parts.push(clean(payload.Ease_preference).toLowerCase());
+  if (label === "TDCR" && clean(payload?.Length_preference)) parts.push(clean(payload.Length_preference).toLowerCase());
+  if (revised) parts.push("revised");
+  return parts.join("_") + ".pdf";
+}
+
 // ── Approval gate ─────────────────────────────────────────────────────
 // Emails a preview PDF to Yulia with Approve / Reject buttons, then blocks
 // the run until she clicks one (via the sis-approval worker completing the
@@ -1362,7 +1380,7 @@ async function waitForApproval(
         <a href="${rejectUrl}" style="background:#dc2626;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-family:sans-serif">✕ Reject</a>
       </p>
     `,
-    attachments: [{ filename: `preview-${payload.Bust_cm}cm.pdf`, content: pdfBase64 }],
+    attachments: [{ filename: patternFileName(label, payload), content: pdfBase64 }],
   });
   logger.log("Approval email sent", { to: "yulia@knitpage.com", tokenId: token.id });
 
