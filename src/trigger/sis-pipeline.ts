@@ -290,6 +290,7 @@ export const sisPipelineTask = task({
     if (!checkSheetHtml) {
       logger.warn("Check sheet not generated", { error: output23Result.error });
       await sendAlert(resend, fromEmail, adminEmail, "Check sheet warning", output23Result.error || "No output2", payload);
+      (payload as any).__holdReasons = [...((payload as any).__holdReasons || []), "check sheet warning"];
     }
 
     // ── Step 5: Convert pattern HTML → PDF ────────────────────────
@@ -604,6 +605,7 @@ export const sisCardiganPipelineTask = task({
     if (!checkSheetHtml) {
       logger.warn("Cardigan Check sheet not generated", { error: output23Result.error });
       await sendAlert(resend, fromEmail, adminEmail, "Cardigan Check sheet warning", output23Result.error || "No output2", payload);
+      (payload as any).__holdReasons = [...((payload as any).__holdReasons || []), "cardigan check sheet warning"];
     }
 
     // ── Step 5: Convert pattern HTML → PDF ────────────────────────
@@ -1130,6 +1132,8 @@ export const briochePipelineTask = task({
         `Marker placement after the one-time increase needs checking before approval. ${calcJson.onetime_marked_rib_detail || ""}`,
         payload
       );
+      // 2026-11-09: also hold this order for approval (auto-send guard).
+      payload.__holdReasons = [...(payload.__holdReasons || []), "one-time increase on a marked sleeve rib (check marker placement)"];
     }
 
     // ── Step 3: Formatter — Pattern HTML ──────────────────────────
@@ -1370,7 +1374,7 @@ async function emailDomainAcceptsMail(email: string): Promise<boolean> {
 }
 
 async function autoSendHoldReasons(label: string, payload: any, calcLog: string | null): Promise<string[]> {
-  const reasons: string[] = [];
+  const reasons: string[] = [...(Array.isArray(payload.__holdReasons) ? payload.__holdReasons : [])];
   const n = (x: any) => Number(x);
   if (!(await emailDomainAcceptsMail(payload.email))) reasons.push(`email looks invalid (${payload.email || "none"})`);
   const st = n(payload.Gauge_st), rw = n(payload.Gauge_row);
