@@ -158,7 +158,7 @@ export function simulate(html) {
     checks.push({ ok: diff <= 0.5, warn: true, what: "body length below the underarm printed ≈ rounds knitted", detail: `${rounds} rounds = ${cm(rounds)} cm, printed ${bodyMeasure[1]} cm` });
   }
   // 2026-11-09: hem decreases = p2tog on honeycomb Round 1 (purl); no extra rounds
-  const hd = t.match(/Round 1 \(first time, with decreases\): ([^\n]*?)\. On this round, purl each slipped stitch together with its yarnover[^\n]*?You have decreased (\d+) sts: (\d+) sts remain\./);
+  const hd = t.match(/First repeat \(with decreases\)[\s\S]*?Round 1: ([^\n]*?)\. Purl each slipped stitch together with its yarnover[^\n]*?You have decreased (\d+) sts: (\d+) sts remain\./i);
   if (hd) {
     const expanded = hd[1].replace(/\(([^()]*)\) (\d+) times/g, (_, x, n) => Array(num(n)).fill(x).join(", "));
     let stsIn = 0, decs = 0; const order = [];
@@ -181,6 +181,8 @@ export function simulate(html) {
   const hem = need(/Work the hem in honeycomb brioche \(see Techniques\), (\d+) rounds in total \(about (\d+(?:\.\d+)?) cm\)/, "hem");
   if (hem) { ok(num(hem[1]) % 4 === 0, "hem rounds are a multiple of 4 (ends with Round 4)", hem[1]); R += num(hem[1]); }
   const hemRep = t.match(/until you have worked (\d+) rounds, ending with Round 4\./);
+  const hemFol = t.match(/Work these 4 rounds (\d+) times in total, until you have worked (\d+) rounds, ending with Round 4\./);
+  if (hem) ok(!!hemFol && 4 * (num(hemFol[1]) + 1) === num(hem[1]) && hemFol[2] === hem[1], "hem: first repeat + following repeats = total hem rounds", hemFol ? `4 + 4×${hemFol[1]} vs ${hem[1]}` : "missing");
   if (hem) ok(!!hemRep && hemRep[1] === hem[1], "hem repeat line gives the same round count", hemRep ? hemRep[1] : "missing");
   const printedBody = t.match(/Body length, measured from the mid-back below the funnel neck to the end of hem[\s\S]*?(\d+(?:\.\d+)?) cm/);
   if (printedBody) {
