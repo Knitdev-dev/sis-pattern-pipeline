@@ -100,8 +100,9 @@ export const orderDigest = schedules.task({
       const alerts = (Array.isArray(meta.alerts) ? meta.alerts : []).filter((a: string) => !IGNORED_ALERTS.includes(a));
       const alertNote = alerts.length ? `<br>Alerts: ${esc(alerts.join("; "))}` : "";
 
-      if (status === "WAITING" && meta.holdReasons) {
-        todo.push(line(`Held for approval: ${esc([].concat(meta.holdReasons).join("; ") || "auto-send off")}${alertNote}`,
+      if (status === "WAITING") {
+        const why = meta.holdReasons ? [].concat(meta.holdReasons).join("; ") : "reason not recorded (held before 14 Nov)";
+        todo.push(line(`Held for approval: ${esc(why)}${alertNote}`,
           "Open the 🔍 APPROVAL NEEDED email: check the reason, then Approve or Reject (email the customer if their input looks wrong)."));
         continue;
       }
