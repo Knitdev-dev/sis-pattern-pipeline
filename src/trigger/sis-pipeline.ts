@@ -1,5 +1,5 @@
 import { simulate } from "./brioche-simulator";
-import { task, logger, wait } from "@trigger.dev/sdk";
+import { task, logger, wait, metadata } from "@trigger.dev/sdk";
 import { Resend } from "resend";
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -1430,10 +1430,12 @@ async function waitForApproval(
     } catch (e: any) {
       logger.warn("Auto-send review copy failed (non-fatal)", { err: e.message });
     }
+    try { metadata.set("outcome", "auto-sent"); } catch {}
     logger.log("Auto-send: guards passed, sending without approval", { label, runId });
     return true;
   }
   logger.log("Auto-send: holding for approval", { autoSendOn, reasons });
+  try { metadata.set("holdReasons", reasons.length ? reasons : ["auto-send is switched off"]); } catch {}
 
   const token = await wait.createToken({ timeout: "7d" });
   const base = process.env.APPROVAL_URL!;
@@ -1718,6 +1720,7 @@ async function sendAlert(
   detail: string,
   inputs: object
 ) {
+  try { metadata.append("alerts", title); } catch {}
   await resend.emails.send({
     from,
     to: [to],
