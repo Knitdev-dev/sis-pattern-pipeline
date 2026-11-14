@@ -336,7 +336,8 @@ export const sisPipelineTask = task({
     }
 
     // ── Step 9: Send admin confirmation copy ──────────────────────
-    await resend.emails.send({
+    // Auto-sent orders already produced the "✅ AUTO-SENT" copy (with PDF) — skip this duplicate.
+    if (metadata.get("outcome") !== "auto-sent") await resend.emails.send({
       from: fromEmail,
       to: [adminEmail],
       subject: `✅ Pattern SENT — ${payload.email || "no email"} — Bust ${payload.Bust_cm}cm`,
@@ -651,7 +652,8 @@ export const sisCardiganPipelineTask = task({
     }
 
     // ── Step 9: Send admin confirmation copy ──────────────────────
-    await resend.emails.send({
+    // Auto-sent orders already produced the "✅ AUTO-SENT" copy (with PDF) — skip this duplicate.
+    if (metadata.get("outcome") !== "auto-sent") await resend.emails.send({
       from: fromEmail,
       to: [adminEmail],
       subject: `✅ Cardigan Pattern SENT — ${payload.email || "no email"} — Bust ${payload.Bust_cm}cm`,
@@ -959,7 +961,8 @@ export const tdcrPipelineTask = task({
     }
 
     // ── Step 9: Send admin confirmation copy ──────────────────────
-    await resend.emails.send({
+    // Auto-sent orders already produced the "✅ AUTO-SENT" copy (with PDF) — skip this duplicate.
+    if (metadata.get("outcome") !== "auto-sent") await resend.emails.send({
       from: fromEmail,
       to: [adminEmail],
       subject: `✅ TDCR Pattern SENT — ${payload.email || "no email"} — Bust ${payload.Bust_cm}cm`,
@@ -1248,7 +1251,8 @@ export const briochePipelineTask = task({
     }
 
     // ── Step 9: Send admin confirmation copy ──────────────────────
-    await resend.emails.send({
+    // Auto-sent orders already produced the "✅ AUTO-SENT" copy (with PDF) — skip this duplicate.
+    if (metadata.get("outcome") !== "auto-sent") await resend.emails.send({
       from: fromEmail,
       to: [adminEmail],
       subject: `✅ Brioche Pattern SENT — ${payload.email || "no email"} — Bust ${payload.Bust_cm}cm`,
@@ -1502,8 +1506,8 @@ async function storePatternHtml(
     logger.log("Interactive pattern stored", { url });
     return url;
   } catch (e: any) {
+    // No email any more (2026-11-14): known, harmless — the PDF is still sent.
     logger.warn("Pattern store failed (non-fatal)", { err: e.message });
-    await sendAlert(resend, fromEmail, adminEmail, "Pattern store failed", e.message, payload);
     return null;
   }
 }
