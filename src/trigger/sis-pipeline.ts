@@ -345,7 +345,7 @@ export const sisPipelineTask = task({
         <h2>Pattern sent successfully</h2>
         <p><strong>Run ID:</strong> ${ctx.run.id}</p>
         <p><strong>Customer:</strong> ${payload.email || "no email"}</p>
-        <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row · ${payload.Ease_preference} · ${payload.Length_preference}</p>
+        <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row · ${payload.Ease_preference}${payload.Length_preference ? " · " + payload.Length_preference : ""}</p>
         <p><strong>Nodes active:</strong> ${JSON.stringify(calcJson.decision_path?.nodes_active)}</p>
         <p><strong>Validation warnings:</strong> ${JSON.stringify(validation.warnings || [])}</p>
       `,
@@ -661,7 +661,7 @@ export const sisCardiganPipelineTask = task({
         <h2>Cardigan Pattern sent successfully</h2>
         <p><strong>Run ID:</strong> ${ctx.run.id}</p>
         <p><strong>Customer:</strong> ${payload.email || "no email"}</p>
-        <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row · ${payload.Ease_preference} · ${payload.Length_preference}</p>
+        <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row · ${payload.Ease_preference}${payload.Length_preference ? " · " + payload.Length_preference : ""}</p>
         <p><strong>Nodes active:</strong> ${JSON.stringify(calcJson.decision_path?.nodes_active)}</p>
         <p><strong>Cardigan info:</strong> ${JSON.stringify({
           front_sts: calcJson.cardigan?.Cardigan_front_sts,
@@ -851,7 +851,7 @@ export const tdcrPipelineTask = task({
           </ul>
           <h3>Their original order</h3>
           <p>Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row
-             · ${payload.Ease_preference} · ${payload.Length_preference}
+             · ${payload.Ease_preference}${payload.Length_preference ? " · " + payload.Length_preference : ""}
              · Sleeve ${payload.Sleeve_length_cm}cm</p>
           <p><strong>Measured gauge:</strong> ${calcJson.resume_gs} sts × ${calcJson.resume_gr} rows / 10 cm
              (ordered at ${payload.Gauge_st} × ${payload.Gauge_row})</p>
@@ -970,7 +970,7 @@ export const tdcrPipelineTask = task({
         <h2>TDCR Pattern sent successfully</h2>
         <p><strong>Run ID:</strong> ${ctx.run.id}</p>
         <p><strong>Customer:</strong> ${payload.email || "no email"}</p>
-        <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row · ${payload.Ease_preference} · ${payload.Length_preference}</p>
+        <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row · ${payload.Ease_preference}${payload.Length_preference ? " · " + payload.Length_preference : ""}</p>
         <p><strong>Calculator checks:</strong> ${JSON.stringify(calcJson.checks)}</p>
         <p><strong>Validation warnings:</strong> ${JSON.stringify(validation.warnings || [])}</p>
       `,
@@ -1424,7 +1424,7 @@ async function waitForApproval(
         html: `
           <h2>Pattern sent automatically (all guards passed)</h2>
           <p><strong>Customer:</strong> ${payload.email || "no email"}</p>
-          <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row · ${payload.Ease_preference} · ${payload.Length_preference}</p>
+          <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row · ${payload.Ease_preference}${payload.Length_preference ? " · " + payload.Length_preference : ""}</p>
           <p><strong>Run ID:</strong> ${runId}</p>
           <hr>
           <pre style="font-size:11px;background:#f5f5f5;padding:12px;white-space:pre-wrap">${calcLog || "not generated"}</pre>
@@ -1454,7 +1454,7 @@ async function waitForApproval(
       <h2>Pattern ready for approval</h2>
       <p style="background:#fff7ed;padding:8px"><strong>Held because:</strong> ${reasons.length ? reasons.join("; ") : "auto-send is switched off (AUTO_SEND=off)"}</p>
       <p><strong>Customer:</strong> ${payload.email || "no email"}</p>
-      <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row · ${payload.Ease_preference} · ${payload.Length_preference}</p>
+      <p><strong>Inputs:</strong> Bust ${payload.Bust_cm}cm · Gauge ${payload.Gauge_st}st/${payload.Gauge_row}row · ${payload.Ease_preference}${payload.Length_preference ? " · " + payload.Length_preference : ""}</p>
       <p><strong>Run ID:</strong> ${runId}</p>
       <hr>
       <h3>Calculation Log</h3>
