@@ -3,6 +3,9 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - "cloudflare/**"
+      - ".github/workflows/cloudflare-deploy.yml"
 jobs:
   deploy:
     runs-on: ubuntu-latest

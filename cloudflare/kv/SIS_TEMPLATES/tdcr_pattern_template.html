@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Your Personal Knitting Pattern</title>
+<link href="https://fonts.googleapis.com/css2?family=League+Spartan:wght@400;600;700;900&amp;family=Lora:ital,wght@0,400;0,600;1,400&amp;display=swap" rel="stylesheet"/>
+<style>
+  /* ── PAGE RULES (Paged.js) ── */
+  @page {
+    size: A4;
+    margin: 20mm 16mm 22mm 16mm;
+
+    @top-left {
+      content: "Your Personal Knitting Pattern";
+      font-family: 'League Spartan', sans-serif;
+      font-size: 7.5pt;
+      font-weight: 700;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: #8a7a62;
+      padding-bottom: 4mm;
+      border-bottom: 1px solid rgba(0,0,0,0.13);
+      width: 100%;
+    }
+    @top-right {
+      content: string(section-title);
+      font-family: 'League Spartan', sans-serif;
+      font-size: 7.5pt;
+      font-weight: 400;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #8a7a62;
+      padding-bottom: 4mm;
+      border-bottom: 1px solid rgba(0,0,0,0.13);
+      width: 100%;
+      text-align: right;
+    }
+    @bottom-left {
+      content: "Knitpage";
+      font-family: 'League Spartan', sans-serif;
+      font-size: 7.5pt;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #6b6158;
+      padding-top: 3mm;
+      border-top: 1px solid rgba(0,0,0,0.13);
+      width: 100%;
+    }
+    @bottom-right {
+      content: "Page " counter(page);
+      font-family: 'League Spartan', sans-serif;
+      font-size: 7.5pt;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #6b6158;
+      padding-top: 3mm;
+      border-top: 1px solid rgba(0,0,0,0.13);
+      width: 100%;
+      text-align: right;
+    }
+  }
+
+  /* Cover page — no margins, no header/footer */
+  @page cover {
+    margin: 0;
+    @top-left { content: none; }
+    @top-right { content: none; }
+    @bottom-left { content: none; }
+    @bottom-right { content: none; }
+  }
+
+  /* Suppress header on the very first content page (right after cover) */
+  @page :first {
+    @top-left { content: none; }
+    @top-right { content: none; }
+  }
+
+  /* ── DESIGN TOKENS ── */
+  :root {
+    --bg: #f5f2ed;
+    --ink: #1a1612;
+    --mid: #6b6158;
+    --accent: #8a7a62;
+    --rule: rgba(0,0,0,0.13);
+    --highlight-bg: #eeeae3;
+    --warn-bg: #fdf6ec;
+    --warn-border: #c89a4a;
+    --check-bg: #efe9df;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    background: var(--bg);
+    font-family: 'Lora', Georgia, serif;
+    color: var(--ink);
+  }
+
+  /* ── COVER ── */
+  .cover {
+    page: cover;
+    break-after: page;
+    width: 210mm;
+    height: 297mm;
+    position: relative;
+    overflow: hidden;
+  }
+  .cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .cover-title-block {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: linear-gradient(to bottom, transparent 0%, rgba(10,8,6,0.68) 38%, rgba(10,8,6,0.82) 100%);
+    padding: 18mm 11mm 11mm 11mm;
+  }
+  .cover-title-label {
+    font-family: 'League Spartan', sans-serif;
+    font-size: 7.5pt;
+    font-weight: 700;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.65);
+    display: block;
+    margin-bottom: 2.5mm;
+  }
+  .cover-title-name {
+    font-family: 'League Spartan', sans-serif;
+    font-size: 22pt;
+    font-weight: 900;
+    letter-spacing: -0.5px;
+    text-transform: uppercase;
+    color: #fff;
+    line-height: 1.05;
+  }
+
+  /* ── SECTION HEADINGS — drive page breaks AND running header ── */
+  h1.section {
+    font-family: 'League Spartan', sans-serif;
+    font-size: 20pt;
+    font-weight: 900;
+    letter-spacing: -0.5px;
+    text-transform: uppercase;
+    color: var(--ink);
+    margin-bottom: 5mm;
+    margin-top: 0;
+    padding-bottom: 2.5mm;
+    border-bottom: 2px solid var(--ink);
+
+    break-before: page;
+    string-set: section-title content();
+    break-after: avoid;
+  }
+  /* First section after cover should not force an extra page (cover already breaks) */
+  .cover + h1.section { break-before: auto; }
+
+  h2.subsection {
+    font-family: 'League Spartan', sans-serif;
+    font-size: 12pt;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--ink);
+    margin-top: 6mm;
+    margin-bottom: 3mm;
+    break-after: avoid;
+  }
+
+  /* ── BODY TEXT ── */
+  p, ol, ul, li {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 10pt;
+    line-height: 1.65;
+    color: var(--ink);
+  }
+  p { margin-bottom: 3mm; orphans: 3; widows: 3; }
+  ol, ul { margin: 0 0 3mm 0; padding-left: 6mm; }
+  li { margin-bottom: 1mm; }
+
+  /* ── PATTERN DETAILS TABLE ── */
+  .details-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 6mm;
+  }
+  .details-table td {
+    padding: 2.5mm 3mm;
+    font-size: 10pt;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  .details-table td:first-child {
+    font-family: 'League Spartan', sans-serif;
+    font-size: 8.5pt;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--mid);
+    width: 42%;
+    padding-right: 4mm;
+  }
+  .details-table td:last-child {
+    font-family: 'Lora', serif;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  /* Finished Measurements: heading, schematic and a–e table stay on one page */
+  .measurements-block { break-inside: avoid; page-break-inside: avoid; }
+  .measurements-block .schematic { max-width: 135mm; }
+  .schematic-table td:first-child {
+    width: 68%;
+  }
+
+  /* ── STITCH COUNT BOX ── */
+  .stitch-box {
+    background: var(--highlight-bg);
+    border-left: 3px solid var(--accent);
+    padding: 3mm 4mm;
+    margin: 3.5mm 0;
+    font-size: 9.5pt;
+    line-height: 1.6;
+    break-inside: avoid;
+  }
+  .stitch-box .label {
+    font-family: 'League Spartan', sans-serif;
+    font-size: 7.5pt;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 1.5mm;
+  }
+
+  /* ── FLAG / WARNING BOX ── */
+  .flag-box {
+    background: var(--warn-bg);
+    border-left: 3px solid var(--warn-border);
+    padding: 3mm 4mm;
+    margin: 3.5mm 0;
+    font-size: 9.5pt;
+    line-height: 1.6;
+    font-style: italic;
+    color: #5a4a20;
+    break-inside: avoid;
+  }
+
+  /* ── MID-YOKE CHECKPOINT BOX ──
+     Deliberately louder than .stitch-box and .flag-box: a full 2px border on
+     all four sides rather than a left rule, so it reads as an interruption to
+     the knitting rather than an aside alongside it. The knitter must stop here.
+     Uses the accent tone at higher contrast; --check-bg is a warmer tint than
+     --highlight-bg so the two never read as the same kind of box. */
+  .checkpoint-box {
+    background: var(--check-bg);
+    border: 2px solid var(--accent);
+    border-radius: 1.5mm;
+    padding: 5mm 5.5mm;
+    margin: 6mm 0;
+    font-size: 9.5pt;
+    line-height: 1.65;
+    break-inside: avoid;
+  }
+  .checkpoint-box .checkpoint-title {
+    font-family: 'League Spartan', sans-serif;
+    font-size: 9.5pt;
+    font-weight: 700;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: block;
+    padding-bottom: 2mm;
+    margin-bottom: 3mm;
+    border-bottom: 1px solid var(--accent);
+  }
+  .checkpoint-box p { margin-bottom: 2.5mm; }
+  .checkpoint-box p:last-child { margin-bottom: 0; }
+  /* Inner panel holding the two target figures — inverted against the box fill
+     so the numbers the knitter is comparing against are the loudest thing in
+     the block. */
+  .checkpoint-figures {
+    background: #fff;
+    border-left: 3px solid var(--accent);
+    padding: 3mm 4mm;
+    margin: 3.5mm 0;
+  }
+  .checkpoint-figures .label {
+    font-family: 'League Spartan', sans-serif;
+    font-size: 7.5pt;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 2mm;
+  }
+  .checkpoint-figures .fig { display: block; margin-bottom: 1.5mm; }
+  .checkpoint-figures .fig:last-child { margin-bottom: 0; }
+  .checkpoint-figures .fig strong {
+    font-family: 'League Spartan', sans-serif;
+    font-size: 11pt;
+    letter-spacing: 0.3px;
+  }
+  /* Verdict lines: the two outcomes of the measurement, set apart from the
+     surrounding prose so the knitter can act without re-reading. */
+  .checkpoint-verdict {
+    border-top: 1px solid var(--rule);
+    margin-top: 3.5mm;
+    padding-top: 3mm;
+  }
+
+  /* Marks the revised heading so a knitter holding both PDFs can see at a
+     glance which document they are looking at. */
+  .revised-flag {
+    color: var(--accent);
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 0.4mm;
+  }
+
+  /* Row counts inside stitch boxes: a second way for a knitter to confirm they
+     are where the pattern thinks they are, and the number the correction form
+     asks for. Set quieter than the stitch counts so it does not compete. */
+  .row-count {
+    display: block;
+    margin-top: 1.5mm;
+    font-size: 8.5pt;
+    color: var(--mid);
+  }
+
+  /* ── INSTRUCTION ROW ── */
+  .instr { margin-bottom: 2mm; font-size: 10pt; line-height: 1.6; }
+  .instr strong {
+    font-family: 'League Spartan', sans-serif;
+    font-weight: 700;
+    font-size: 9pt;
+    letter-spacing: 0.3px;
+  }
+
+  /* ── STITCH LIBRARY NOTE ── */
+  .stitch-note {
+    font-family: 'Lora', serif;
+    font-style: italic;
+    font-size: 9pt;
+    color: var(--mid);
+    border: 1px dashed rgba(0,0,0,0.15);
+    padding: 2.5mm 3.5mm;
+    margin: 3mm 0;
+    break-inside: avoid;
+  }
+
+  /* ── DIVIDER ── */
+  .divider { border: none; border-top: 1px solid var(--rule); margin: 5mm 0; }
+
+  /* ── PIECE LABEL ── */
+  .piece-label {
+    font-family: 'League Spartan', sans-serif;
+    font-size: 8pt;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    display: inline-block;
+    padding: 1mm 3mm;
+    margin-bottom: 4mm;
+    margin-top: 2mm;
+  }
+
+  /* ── SCHEMATIC ── */
+  .schematic-wrapper {
+    margin: 3mm 0 5mm;
+    text-align: center;
+    break-inside: avoid;
+  }
+  .schematic {
+    display: block;
+    width: 100%;
+    max-width: 160mm;
+    height: auto;
+    margin: 0 auto;
+  }
+  .schematic .piece {
+    fill: var(--bg);
+    stroke: var(--accent);
+    stroke-width: 1.4;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    vector-effect: non-scaling-stroke;
+  }
+  .schematic .dim-line {
+    stroke: var(--accent);
+    stroke-width: 0.7;
+    fill: none;
+    vector-effect: non-scaling-stroke;
+  }
+  .schematic .dim-label {
+    font-family: 'League Spartan', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    font-style: italic;
+    fill: var(--ink);
+  }
+  /* ── PHOTOS (sample sweater) ── */
+  .photo { margin: 4mm auto 5mm; break-inside: avoid; text-align: center; }
+  .photo img { display: block; width: 100%; height: auto; margin: 0 auto; }
+  .photo.right { float: right; margin: 0 0 3mm 6mm; }
+  .stitch-box, .flag-box, .stitch-note, .checkpoint-box { display: flow-root; }
+  h1.section, h2.subsection { clear: both; }
+  .photo.right figcaption { text-align: left; }
+  .photo figcaption { font-family: 'Lora', serif; font-style: italic; font-size: 8.5pt; color: var(--mid); margin-top: 1.5mm; }
+</style>
+<script>
+window.PagedConfig = {
+  auto: true,
+  after: function() {
+    document.body.setAttribute('data-paged-done', 'true');
+  }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/pagedjs/dist/paged.polyfill.js"></script></head>
+<body>
+<!-- ════════════════════════════════════════
+     PAGE 1 — COVER
+════════════════════════════════════════ -->
+<div class="cover">
+<img alt="Round-neck raglan sweater, knitted by Knitpage" src="https://raw.githubusercontent.com/Knitdev-dev/sis-pattern-pipeline/main/assets/tdcr/tdcr-cover-sample1.jpg" style="object-position:50% 35%"/>
+<div class="cover-title-block">
+<span class="cover-title-label">Your personal knitting pattern · made to measure</span>
+<div class="cover-title-name">Round-Neck Raglan Sweater</div>
+</div>
+</div>
+<!-- ════════════════════════════════════════
+     PAGE 2 — PATTERN DETAILS + YOKE START
+════════════════════════════════════════ -->
+
+
+<h1 class="section">1. Pattern Details</h1>
+<h2 class="subsection">About This Pattern</h2>
+<p>This sweater is worked seamlessly from the top down in stockinette stitch. You begin at the round neckline with a folded rib collar, then shape the yoke with raglan increases — using short rows along the way to lift the back neck. Once the yoke is the right depth, the sleeve stitches are placed on hold and the body is worked in the round to its full length, finishing with a ribbed band at the hem. Each sleeve is then picked up at the underarm and worked in the round down to a ribbed cuff. The sweater has no seams.</p>
+<figure class="photo" style="max-width:80mm"><img src="https://raw.githubusercontent.com/Knitdev-dev/sis-pattern-pipeline/main/assets/tdcr/tdcr-finished-raglan.jpg" alt="The sample sweater: raglan lines, folded collar and ribbed cuff."/><figcaption>The sample sweater: raglan lines, folded collar and ribbed cuff.</figcaption></figure>
+
+<h2 class="subsection">Size Guide</h2>
+<p>This sweater is designed with <strong>[Ease_] cm</strong> of positive ease, to fit a bust of <strong>[bust_cm] cm</strong>. Your finished sweater will measure <strong>[finished_chest_cm] cm</strong> around the chest (the pattern rounds to whole stitches, so this can differ slightly from bust + ease).</p>
+<p>It can help to measure a well-fitting garment you already own and confirm that the finished measurements in the table below fall within your preferred range.</p>
+<p>The body length, measured from the mid-back below the rib band to the hem, is <strong>[body_length_cm] cm</strong>. This is easy to adjust — simply knit the body a little shorter or longer before beginning the ribbed band at the hem. The same applies to the sleeves.</p>
+<h2 class="subsection">A Note on Gauge</h2>
+<p>Getting the fit right depends on gauge — and gauge can be surprisingly unpredictable. Even if your swatch matched, the fabric of a finished sweater often behaves differently: gravity, fabric weight, and the sheer volume of the piece can all shift things slightly. Ideally, gauge is measured over a larger area on a garment that has already been knitted, blocked, and worn. That's not always practical, of course — but it's worth keeping in mind.</p>
+<p>This pattern uses half-twisted rib (k1 tbl, p1) at the collar, cuffs, and hem — estimated at <strong>[rib_gauge_sts] sts</strong> per 10cm against your <strong>[Gauge_sts] sts</strong> stockinette gauge. It knits up a little tighter than standard 1×1 rib, but gives a neater, more defined edge.</p>
+<table class="details-table">
+<tr>
+<td>Finished chest circumference</td>
+<td><strong>[finished_chest_cm] cm</strong>  (for a [bust_cm] cm bust with [Ease_] cm ease)</td>
+</tr>
+<tr>
+<td>Length</td>
+<td><strong>[body_length_cm] cm</strong>  measured from mid back</td>
+</tr>
+<tr>
+<td>Gauge</td>
+<td><strong>[Gauge_sts] sts × [Gauge_rows] rows</strong> = 10 × 10 cm in stockinette stitch</td>
+</tr>
+<tr>
+<td>Needles</td>
+<td>Circular needle in your swatch size for the yoke, body and sleeves, and one size smaller (e.g. 3.5 mm if your swatch needle is 4 mm) for the collar, cuffs and hem rib</td>
+</tr>
+<tr>
+<td>Yarn</td>
+<td>300–800 g depending on size</td>
+</tr>
+<tr>
+<td>Construction</td>
+<td>Top-down seamless raglan, round neck</td>
+</tr>
+</table>
+<h2 class="subsection">The Sample Shown</h2>
+<figure class="photo right" style="width:42mm"><img src="https://raw.githubusercontent.com/Knitdev-dev/sis-pattern-pipeline/main/assets/tdcr/tdcr-yarn.jpg" alt="Rowan Handknit Cotton, colour 378."/><figcaption>Rowan Handknit Cotton, colour 378.</figcaption></figure>
+<p>The sweater in the photos is knitted in Rowan Handknit Cotton, colour 378, on 3 mm circular needles (80 cm long) — please note that I am a loose knitter! — for a 97 cm bust with a close fit.</p>
+
+
+
+<!-- ════════════════════════════════════════
+     PAGE 3 — ABBREVIATIONS
+════════════════════════════════════════ -->
+
+
+<h1 class="section">2. Abbreviations</h1>
+<table class="details-table">
+<tr><td>RS / WS</td><td>Right side / Wrong side</td></tr>
+<tr><td>BOR</td><td>Beginning of round</td></tr>
+<tr><td>SM</td><td>Slip marker (slip the marker from the left to the right needle as you pass it)</td></tr>
+<tr><td>k</td><td>Knit</td></tr>
+<tr><td>p</td><td>Purl</td></tr>
+<tr><td>tbl</td><td>Through the back loop (k1 tbl = knit 1 through the back loop)</td></tr>
+<tr><td>st(s)</td><td>Stitch(es)</td></tr>
+<tr><td>CO</td><td>Cast on — <a href="https://www.youtube.com/watch?v=IzVy8fRfOw0" target="_blank">tutorial</a></td></tr>
+<tr><td>BO</td><td>Bind off — <a href="https://brooklyntweed.com/pages/how-to-knit-italian-tubular-bind-off-video-tutorial" target="_blank">Italian tubular bind-off tutorial</a></td></tr>
+<tr><td>M1L</td><td>Make 1 Left (left-leaning increase) — <a href="https://www.youtube.com/watch?v=eADPJrb9Ym8" target="_blank">tutorial</a></td></tr>
+<tr><td>M1Lp</td><td>Make 1 Left purl (used in place of M1L on purl/WS rows) — <a href="https://www.youtube.com/watch?v=jh6v10RAdQQ" target="_blank">tutorial</a></td></tr>
+<tr><td>M1R</td><td>Make 1 Right (right-leaning increase) — <a href="https://www.youtube.com/watch?v=eADPJrb9Ym8" target="_blank">tutorial</a></td></tr>
+<tr><td>M1Rp</td><td>Make 1 Right purl (used in place of M1R on purl/WS rows) — <a href="https://www.youtube.com/watch?v=jh6v10RAdQQ" target="_blank">tutorial</a></td></tr>
+<tr><td>ssk</td><td>Slip, slip, knit (left-leaning decrease) — <a href="https://knittinghelp.com/videos/decreases" target="_blank">tutorial</a></td></tr>
+<tr><td>k2tog</td><td>Knit two together (right-leaning decrease) — <a href="https://knittinghelp.com/videos/decreases" target="_blank">tutorial</a></td></tr>
+</table>
+
+
+<!-- ════════════════════════════════════════
+     PAGE 4 — PATTERN: COLLAR + YOKE SETUP
+════════════════════════════════════════ -->
+
+
+<h1 class="section">3. Pattern</h1>
+<h2 class="subsection">Ribbed Round Collar</h2>
+<div class="flag-box"><strong>Tip:</strong> Switch to a needle one size smaller for the rib sections (collar, cuffs and hem). It keeps the rib neat and snug — tester feedback.</div>
+<p>Cast on <strong>[N_sts] sts</strong>. Join to work in the round, ensuring the cast-on edge is not twisted. Place a marker for the beginning of the round (BOR).</p>
+<p>The collar is worked in half-twisted rib (k1 tbl, p1), which gives a neater, more defined edge than standard 1×1 rib.</p>
+<div class="stitch-note">Stitch Library — Half-twisted rib technique: <a href="https://www.instagram.com/reels/C4avSWjLA55/" target="_blank">tutorial</a>.</div>
+<!--TDCR_IF collar_dense_gauge=1-->
+<div class="instr"><strong>Rounds 1–9:</strong> half-twisted rib (k1 tbl, p1).</div>
+<div class="instr"><strong>Round 10:</strong> Purl to end.</div>
+<div class="instr"><strong>Rounds 11–19:</strong> half-twisted rib (k1 tbl, p1).</div>
+<!--TDCR_END-->
+<!--TDCR_IF collar_dense_gauge=0-->
+<div class="instr"><strong>Rounds 1–6:</strong> half-twisted rib (k1 tbl, p1).</div>
+<div class="instr"><strong>Round 7:</strong> Purl to end.</div>
+<div class="instr"><strong>Rounds 8–13:</strong> half-twisted rib (k1 tbl, p1).</div>
+<!--TDCR_END-->
+<figure class="photo right" style="width:45mm"><img src="https://raw.githubusercontent.com/Knitdev-dev/sis-pattern-pipeline/main/assets/tdcr/tdcr-collar-rib.jpg" alt="The collar rib before folding."/><figcaption>The collar rib before folding.</figcaption></figure>
+<p style="margin-top:3mm"><strong>Next round:</strong> Fold the neckband so the cast-on edge sits behind the live sts. Knit each live st together with its corresponding st from the cast-on edge to close the fold (see the link below). Knit 1 round plain.</p>
+<div class="stitch-note">Stitch Library — Folded neckband technique: <a href="https://www.instagram.com/reels/DRfndCpkqxH/" target="_blank">tutorial</a>.</div>
+<h2 class="subsection">Yoke</h2>
+<figure class="photo right" style="width:45mm"><img src="https://raw.githubusercontent.com/Knitdev-dev/sis-pattern-pipeline/main/assets/tdcr/tdcr-yoke-markers.jpg" alt="The yoke after the short rows, with the raglan markers in place."/><figcaption>The yoke after the short rows, with the raglan markers in place.</figcaption></figure>
+<p>Arrange the <strong>[N_sts] sts</strong> with raglan markers as follows:</p>
+<div class="stitch-box">
+<span class="label">At the beginning of the yoke</span>
+<strong>[Y1_rb]</strong> sts (right back) · place marker · [raglan_sts] raglan sts · place marker · <strong>[Y1_slv]</strong> sts (right sleeve) · place marker · [raglan_sts] raglan sts · place marker · <strong>[Y1_f]</strong> sts (front) · place marker · [raglan_sts] raglan sts · place marker · <strong>[Y1_slv]</strong> sts (left sleeve) · place marker · [raglan_sts] raglan sts · place marker · <strong>[Y1_lb]</strong> sts (left back)
+  </div>
+<p>The BOR marker sits at centre back.</p>
+
+
+<!-- ════════════════════════════════════════
+     PAGE 5 — SHORT ROWS + RAGLAN INCREASES
+════════════════════════════════════════ -->
+
+
+<h2 class="subsection">Short Rows</h2>
+<p>Short rows shape the back neck for a comfortable fit. Work as follows:</p>
+<div class="stitch-note">Stitch Library — German short rows technique: <a href="https://www.youtube.com/watch?v=a3S9cl47PYw" target="_blank">tutorial</a>.</div>
+<div class="flag-box"><strong>Notes on German short rows:</strong> Each time you work the German short rows, turn the work, slip the first stitch purlwise with the yarn in front, then pull the yarn firmly up and over the needle so you see two "legs" of the stitch. This is called the double stitch — although it is really just one stitch. On a following row, when you reach a double stitch made earlier, work its two legs together as a single stitch (knit them together on RS rows, purl them together on WS rows). This closes the gaps and is what makes the short rows invisible. It is all shown in the tutorial above.</div>
+<div class="instr"><strong>Row 1 (RS):</strong> Knit to marker, M1R, SM, k[raglan_sts], SM, M1L, knit to [sr_turn_first] sts before next marker, turn. <em>(2 sts increased this row)</em></div>
+<div class="instr"><strong>Row 2 (WS):</strong> Purl to BOR marker, purl to next marker, M1Rp, SM, p[raglan_sts], SM, M1Lp, purl to [sr_turn_first] sts before next marker, turn. <em>(2 sts increased this row)</em></div>
+<div class="instr"><strong>Row 3 (RS):</strong> Knit to BOR marker, knit to next marker, M1R, SM, k[raglan_sts], SM, M1L, knit to [sr_turn_2] sts before next marker, turn. <em>(2 sts increased this row)</em></div>
+<div class="instr"><strong>Row 4 (WS):</strong> Purl to BOR marker, purl to next marker, M1Rp, SM, p[raglan_sts], SM, M1Lp, purl to [sr_turn_2] sts before next marker, turn. <em>(2 sts increased this row)</em></div>
+<!--TDCR_IF Phase1_extra_pairs>0-->
+<!--
+  One extra single-point shaping row pair, used when Phase1 (gauge-scaled)
+  exceeds the baseline 4 rows. Phase1_extra_pairs is computed in
+  tdcr-calculator.txt STEP 6 as (Phase1-4)/2. Known limitation: this
+  conditional only renders ONE extra pair; gauges dense enough to need
+  Phase1_extra_pairs>1 still require manual pattern review (flag in QA).
+-->
+<div class="instr"><strong>Row [extra_row_n] (RS):</strong> Knit to BOR marker, knit to next marker, M1R, SM, k[raglan_sts], SM, M1L, knit to [sr_turn_3] sts before next marker, turn. <em>(2 sts increased this row)</em></div>
+<div class="instr"><strong>Row [extra_row_n_plus1] (WS):</strong> Purl to BOR marker, purl to next marker, M1Rp, SM, p[raglan_sts], SM, M1Lp, purl to [sr_turn_3] sts before next marker, turn. <em>(2 sts increased this row)</em></div>
+<!--TDCR_END-->
+<div class="instr"><strong>Row [Row5_n] (RS):</strong> Knit to BOR marker, knit to next marker, M1R, SM, k[raglan_sts], SM, M1L, knit to next marker, M1R, SM, k[raglan_sts], SM, M1L, k2, turn. <em>(4 sts increased this row)</em></div>
+<div class="instr"><strong>Row [Row6_n] (WS):</strong> Purl to BOR marker, purl to next marker, M1Rp, SM, p[raglan_sts], SM, M1Lp, purl to next marker, M1Rp, SM, p[raglan_sts], SM, M1Lp, p2, turn. <em>(4 sts increased this row)</em></div>
+<div class="instr"><strong>Row [Row7_n] (RS):</strong> Knit to BOR marker, knit to next marker, M1R, SM, k[raglan_sts], SM, M1L, knit to next marker, M1R, SM, k[raglan_sts], SM, M1L, knit to 2 sts past last turn, turn. <em>(4 sts increased this row)</em></div>
+<div class="instr"><strong>Row [Row8_n] (WS):</strong> Purl to BOR marker, purl to next marker, M1Rp, SM, p[raglan_sts], SM, M1Lp, purl to next marker, M1Rp, SM, p[raglan_sts], SM, M1Lp, purl to 2 sts past last turn, turn. <em>(4 sts increased this row)</em></div>
+<!--TDCR_IF SR_extra>0-->
+<p style="margin-top:3mm">Repeat Rows [Row7_n]–[Row8_n] until you have worked them a total of <strong>[sr_pair_total]</strong> times. Knit to BOR marker.</p>
+<!--TDCR_END-->
+<!--TDCR_IF SR_extra=0-->
+<p style="margin-top:3mm">Knit to BOR marker.</p>
+<!--TDCR_END-->
+<div class="stitch-box">
+<span class="label">After short rows</span>
+<strong>[Y2_rb]</strong> sts (right back) · [raglan_sts] raglan sts · <strong>[Y2_slv]</strong> sts (right sleeve) · [raglan_sts] raglan sts · <strong>[Y2_f]</strong> sts (front) · [raglan_sts] raglan sts · <strong>[Y2_slv]</strong> sts (left sleeve) · [raglan_sts] raglan sts · <strong>[Y2_lb]</strong> sts (left back)<br/>
+<strong>Total: [Y2_total] sts</strong><br/>
+<span class="row-count">Rows worked from below the neckband, at centre back: <strong>[sr_rows]</strong></span>
+</div>
+
+<hr class="divider"/>
+<!--═══════════════════════════════════════════════════════════════════
+    YOKE INCREASE SCHEDULE  (merged: raglan + body-only, single section)
+    Block visibility is gated by counts in the calculator JSON.
+    Rounds 2, 3 and 4 are each defined ONCE, gated to fire
+    only if used by any step below.
+    2026-11-16: the mid-yoke checkpoint box now sits INSIDE the schedule,
+    where the knitter stops. A/B: the calculator puts it inside the
+    raglan_section_html field. C: the step that contains it is split below
+    (chk_c_split_paired / chk_c_split_wb). The old pointer note
+    is gone — it only existed because the box used to sit at the end.
+═══════════════════════════════════════════════════════════════════-->
+<!--TDCR_IF show_rendered_raglan=1-->
+<h2 class="subsection">Raglan Increases</h2>
+[raglan_section_html]
+<!--TDCR_END-->
+<!--TDCR_IF show_legacy_raglan=1-->
+<h2 class="subsection">Raglan Increases</h2>
+<p>This is the raglan increases section, worked in the round from the RS, using the following types of rounds:</p>
+<div class="instr"><strong>Round 1 (raglan inc):</strong> *Knit to marker, M1R, SM, k[raglan_sts], SM, M1L* — repeat * to * 3 more times, knit to end of round. <em>(8 sts increased)</em></div>
+<!--TDCR_END-->
+
+<!--TDCR_IF round2B_needed>0-->
+<div class="instr"><strong>Round 2 (plain):</strong> Knit to end.</div>
+<!--TDCR_END-->
+
+<!--TDCR_IF round2A_needed>0-->
+<div class="instr"><strong>Round 3 (body-only inc):</strong> *Knit to marker, M1R, SM, k[raglan_sts], SM, knit to marker, SM, k[raglan_sts], SM, M1L* — repeat * to * once more, knit to end of round. <em>(4 body sts increased)</em></div>
+<!--TDCR_END-->
+
+<!--TDCR_IF body_only_doubled_inc>0-->
+<div class="instr"><strong>Round 4 (double body-only inc):</strong> *Knit to marker, M1R, M1R, SM, k[raglan_sts], SM, knit to marker, SM, k[raglan_sts], SM, M1L, M1L* — repeat * to * once more, knit to end of round. <em>(8 body sts increased)</em></div>
+<!--TDCR_END-->
+
+<!--TDCR_IF show_legacy_raglan=1-->
+<p style="margin-top:3mm">Work the raglan section in this order:</p>
+<!--TDCR_END-->
+<!--TDCR_IF legacy_paired_line>0-->
+<p>[legacy_paired_text]</p>
+<!--TDCR_END-->
+<!--TDCR_IF chk_c_split_paired=1-->
+<p>[chk_c_first_paired_text] Then stop and check your measurements (box below).</p>
+[checkpoint_html]
+<!--TDCR_IF chk_c_rest>0-->
+<p><strong>Continuing after the box:</strong> [chk_c_rest_paired_text]</p>
+<!--TDCR_END-->
+<!--TDCR_END-->
+<!--TDCR_IF legacy_wb_line>0-->
+<p>[legacy_wb_text]</p>
+<!--TDCR_END-->
+<!--TDCR_IF chk_c_split_wb=1-->
+<p>[chk_c_first_wb_text] Then stop and check your measurements (box below).</p>
+[checkpoint_html]
+<!--TDCR_IF chk_c_rest>0-->
+<p><strong>Continuing after the box:</strong> [chk_c_rest_wb_text]</p>
+<!--TDCR_END-->
+<!--TDCR_END-->
+<!--TDCR_IF body_only_paired_inc>0-->
+<p>[body_only_paired_text]</p>
+<!--TDCR_END-->
+<!--TDCR_IF body_only_consecutive_inc>0-->
+<p>[body_only_consecutive_text]</p>
+<!--TDCR_END-->
+<!--TDCR_IF body_only_doubled_inc>0-->
+<p>[body_only_doubled_text]</p>
+<!--TDCR_END-->
+<!--═══════════════════════════════════════════════════════════════════
+    MID-YOKE MEASUREMENT CHECKPOINT — fallback only
+    Normally the box is placed inside the schedule above. This standalone
+    copy only renders if the calculator could not place it there
+    (show_checkpoint_standalone=1).
+═══════════════════════════════════════════════════════════════════-->
+<!--TDCR_IF show_checkpoint_standalone=1-->
+[checkpoint_html]
+<!--TDCR_END-->
+
+<!--TDCR_IF show_original_yoke=1-->
+<figure class="photo right" style="width:50mm"><img src="https://raw.githubusercontent.com/Knitdev-dev/sis-pattern-pipeline/main/assets/tdcr/tdcr-raglan-line.jpg" alt="The raglan line, with increases either side of the raglan stitches. Body-only increases are also visible here; not every size has them."/><figcaption>The raglan line, with increases either side of the raglan stitches. Body-only increases are also visible here; not every size has them.</figcaption></figure>
+<p>Yoke is complete.</p>
+
+<div class="stitch-box">
+<span class="label">Yoke complete</span>
+<strong>[Y4_rb]</strong> sts (right back) · [raglan_sts] raglan sts · <strong>[Y4_slv]</strong> sts (right sleeve) · [raglan_sts] raglan sts · <strong>[Y4_f]</strong> sts (front) · [raglan_sts] raglan sts · <strong>[Y4_slv]</strong> sts (left sleeve) · [raglan_sts] raglan sts · <strong>[Y4_lb]</strong> sts (left back)<br/>
+<strong>Total: [Y4_total] sts</strong><br/>
+<span class="row-count">Rows worked from below the neckband, at centre back: <strong>[armhole_depth_rows]</strong></span>
+</div>
+<!--TDCR_END-->
+
+<!--═══════════════════════════════════════════════════════════════════
+    RESUME MODE (Phase 2)
+    Rendered whole by the calculator (STEP 11e). When resume_active=1 and
+    resume_ok=1, the resume_html field explains what changed and resume_schedule_html
+    replaces the remaining yoke schedule. Both are finished HTML — substitute
+    verbatim. On a normal fresh pattern both are empty and neither block renders.
+    A resumed pattern that FAILED to solve never reaches the formatter at all:
+    resume_review_required=1 routes the order to manual review upstream.
+═══════════════════════════════════════════════════════════════════-->
+<!--TDCR_IF resume_ok=1-->
+[resume_html]
+<h2 class="subsection"><span class="revised-flag">Revised</span> Raglan Increases</h2>
+[resume_schedule_html]
+<!--TDCR_END-->
+
+
+
+
+<!-- ════════════════════════════════════════
+     PAGE 7 — BODY + SLEEVES + FINISHING
+════════════════════════════════════════ -->
+
+
+<h1 class="section">4. Body</h1>
+<p>Divide for body and sleeves, casting on new sts at each underarm:</p>
+<p>Knit <strong>[Y5_rb]</strong> sts, k[raglan_sts], place the next <strong>[Y4_slv]</strong> sts on a stitch holder (right sleeve), cast on <strong>[UA]</strong> sts at the underarm, k[raglan_sts], knit <strong>[Y4_f]</strong> sts, k[raglan_sts], place the next <strong>[Y4_slv]</strong> sts on a stitch holder (left sleeve), cast on <strong>[UA]</strong> sts at the underarm, k[raglan_sts], knit <strong>[Y4_lb]</strong> sts.</p>
+<div class="stitch-note">Stitch Library — Cable cast-on for the underarm stitches: <a href="https://www.youtube.com/watch?v=PS4a7knXdjw" target="_blank">tutorial</a>.</div>
+<div class="stitch-box">
+<span class="label">Body stitch count</span>
+<strong>[B_sts] sts</strong> on needle for body. The BOR marker stays at centre back.
+  </div>
+<p>Work in the round in stockinette stitch until the piece measures <strong>[body_stockinette_cm] cm</strong> from the mid-back just below the ribbed neck.</p>
+<p>Switch to the smaller needle and work <strong>6 cm</strong> in half-twisted rib (k1 tbl, p1).</p>
+<p>Bind off using your preferred stretchy bind-off method (we recommend the <a href="https://brooklyntweed.com/pages/how-to-knit-italian-tubular-bind-off-video-tutorial">Italian tubular bind-off</a>).</p>
+<hr class="divider"/>
+<h1 class="section">5. Sleeves</h1>
+<div class="piece-label">Make 2 identical sleeves</div>
+<p>Both sleeves are worked identically. Work the first sleeve complete before beginning the second.</p>
+<p>Locate the cast-on <strong>[UA_pickup]</strong> sts on the body's underarm. Hold your work with the top up and the body's underarm cast-on stitches in the middle. Place the BOR marker on your right needle, then, starting from the middle of the underarm cast-on stitches, pick up and knit half of them. Place a new marker, then pick up and knit one extra stitch in the corner between the cast-on stitches and the sleeve's stitches on the holder (see the video below). This helps to avoid a gap that would otherwise form in the corner.</p>
+<div class="flag-box"><strong>On picking up in the sleeve's corners:</strong> Refer to this <a href="https://www.youtube.com/watch?v=g-bmK0nRssI" target="_blank">video</a> for tips on how to do this. Note that the sweater in the video is knitted from the hem up, while ours is knitted top-down — this means the underarm stitches you pick up should be the upside-down V's, as opposed to the video.</div>
+<p>Now you have half of the underarm stitches plus the extra corner stitch on your right needle.</p>
+<p>Place the <strong>[Y4_slv]</strong> sts from the stitch holder on your working left needle, starting from right to left, knit them to one stitch before the end of held stitches. Place another marker, k1.</p>
+<p>Pick up and knit an extra stitch in the sleeve's second corner as you did for the first one. Pick up and knit the remaining half of the underarm cast-on stitches. You are now back at the BOR marker.</p>
+<p>There are now <strong>[SL_sts] sts</strong> on the needle, plus the extra stitch in each corner. These will be decreased in the next round.</p>
+<p>On the next round, knit to the first corner marker, remove it, k2tog (the extra stitch together with the next stitch), knit to the second corner marker, remove it, ssk (the last sleeve stitch together with the extra stitch), knit to the end of round.</p>
+<div class="flag-box"><strong>Length:</strong> This sleeve is designed to measure <strong>[sleeve_length_cm] cm</strong> from underarm to wrist ([sleeve_stockinette_cm] cm stockinette + [cuff_rib_cm] cm rib). Measure your arm from underarm to where you want the sleeve to end — if it differs from [sleeve_length_cm] cm, adjust the stockinette section length accordingly.</div>
+<!--TDCR_IF dec_rounds>0-->
+<p>Continue working in the round in stockinette stitch, slipping the BOR marker every round. [sleeve_dec_text]</p>
+<!--TDCR_END-->
+<div class="stitch-box">
+<span class="label">Cuff stitch count</span>
+<strong>[CU_sts] sts</strong> remain after all decreases.
+  </div>
+<div class="flag-box"><strong>Tip:</strong> As decreases bring the cuff circumference down, you may need to switch to a shorter circular needle, magic loop, or DPNs. Do this whenever the stitches start to feel stretched along the cable — there is no fixed point at which to change; comfort is the guide.</div>
+<div class="flag-box"><strong>About the cuff fit:</strong> The cuff stitch count above is calculated for half-twisted rib (k1 tbl, p1), which sits denser than stockinette — roughly <strong>[rib_gauge_sts] sts</strong> per 10cm rather than your <strong>[Gauge_sts] sts</strong> stockinette gauge. This keeps the finished cuff snug rather than loose. If your own half-twisted rib gauge differs noticeably from this estimate, your cuff circumference may vary slightly from the figure given — swatching the rib stitch itself is the most reliable way to check.</div>
+<!--TDCR_IF sleeve_length_cm<35-->
+<div class="flag-box"><strong>A note on your shorter sleeve:</strong> Because your sleeve ends higher on the arm, where the arm is wider, we've already widened the cuff to suit. Even so, the half-twisted rib is designed to sit snug. If you'd like it looser, you can work fewer decreases along the sleeve to leave more stitches at the cuff, switch to a non-twisted rib (k1, p1), or finish the sleeve in another stitch of your choice — provided you're comfortable adjusting the numbers and execution yourself. If you'd rather not, email us at yulia@knitpage.com and we'll happily rework the maths for you.</div>
+<!--TDCR_END-->
+<figure class="photo right" style="width:55mm"><img src="https://raw.githubusercontent.com/Knitdev-dev/sis-pattern-pipeline/main/assets/tdcr/tdcr-cuff.jpg" alt="The finished cuff in half-twisted rib."/><figcaption>The finished cuff in half-twisted rib.</figcaption></figure>
+<p>Continue working plain in stockinette stitch until the sleeve measures <strong>[sleeve_stockinette_cm] cm</strong> from the underarm.</p>
+<p>Switch to the smaller needle and work <strong>[cuff_rib_cm] cm</strong> in half-twisted rib (k1 tbl, p1). Bind off using your preferred stretchy bind-off method (we recommend the <a href="https://brooklyntweed.com/pages/how-to-knit-italian-tubular-bind-off-video-tutorial">Italian tubular bind-off</a>).</p>
+
+<hr class="divider"/>
+<h1 class="section">6. Finishing</h1>
+<p>Weave in all ends. Block flat to measurements: pin the body out to a width of <strong>[finished_half_chest_cm] cm</strong> (half your chest circumference of [finished_chest_cm] cm) and a length of <strong>[body_length_cm] cm</strong>.</p>
+
+
+<!-- ════════════════════════════════════════
+     PAGE 8 — FINISHED MEASUREMENTS
+════════════════════════════════════════ -->
+
+
+<div class="measurements-block">
+<h2 class="subsection">Finished Measurements</h2>
+<p style="font-size:9.5pt;font-style:italic;margin-bottom:3mm;">See schematic below for measurement reference (a–e).</p>
+<div class="schematic-wrapper">
+<img alt="Flat-lay schematic of raglan sweater with measurement callouts a through e" class="schematic" src="https://cdn.jsdelivr.net/gh/Knitdev-dev/sis-pattern-pipeline@main/assets/charts/TDCR_schematics_measurements.png">
+</div>
+
+<table class="details-table schematic-table">
+<tr>
+<td>a — Chest circumference</td>
+<td><strong>[finished_chest_cm] cm</strong></td>
+</tr>
+<tr>
+<td>b — Body length (from mid-back below the neckband to hem)</td>
+<td><strong>[body_length_cm] cm</strong></td>
+</tr>
+<tr>
+<td>c — Sleeve length (underarm to cuff)</td>
+<td><strong>[sleeve_length_cm] cm</strong></td>
+</tr>
+<tr>
+<td>d — Upper sleeve circumference</td>
+<td><strong>[upper_sleeve_cm] cm</strong></td>
+</tr>
+<tr>
+<td>e — Yoke depth (measured vertically from mid-back below the neckband to underarm, not at an angle)</td>
+<td><strong>[yoke_depth_cm] cm</strong></td>
+</tr>
+</table>
+</div>
+
+<p style="text-align:center;font-family:'League Spartan',sans-serif;font-size:7pt;color:#6b6158;margin-top:6mm;letter-spacing:1px;">Generated by Knitpage · knitpage.com · Pattern for personal use only.</p>
+
+</body>
+</html>

@@ -1,0 +1,59 @@
+name: Deploy to Cloudflare (Workers code + KV templates)
+
+# What this does
+#   cloudflare/workers/<worker-name>.js            -> replaces the CODE of Worker <worker-name>
+#   cloudflare/kv/<NAMESPACE TITLE>/<key>.<ext>    -> writes KV key <key> in that namespace
+# Only files changed in the push are deployed. Worker settings, bindings,
+# variables and secrets are never touched (code-only upload).
+# Every run waits for approval in the "cloudflare-production" environment,
+# and saves the current live version as a downloadable backup first.
+# Put [no-deploy] in a commit message to skip deployment.
+
+on:
+  push:
+    branches: [main]
+    paths: ["cloudflare/workers/**", "cloudflare/kv/**"]
+  workflow_dispatch:
+    inputs:
+      files:
+        description: "Space-separated repo paths to deploy (e.g. cloudflare/kv/SIS_TEMPLATES/tdcr_pattern_template.html)"
+        required: true
+
+concurrency: cloudflare-deploy
+
+jobs:
+  deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[no-deploy]') }}
+    runs-on: ubuntu-latest
+    environment: cloudflare-production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Work out which files changed
+        id: files
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            FILES="${{ github.event.inputs.files }}"
+          else
+            FILES=$(git diff --name-only --diff-filter=AM "${{ github.event.before }}" "${{ github.sha }}" -- cloudflare/workers cloudflare/kv | tr '\n' ' ')
+          fi
+          echo "files=$FILES" >> "$GITHUB_OUTPUT"
+          echo "Files to deploy: $FILES"
+      - name: Deploy (backup first, then upload)
+        if: steps.files.outputs.files != ''
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: node cloudflare/scripts/deploy.mjs ${{ steps.files.outputs.files }}
+      - name: Keep the previous live versions (rollback copies)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudflare-backup-${{ github.run_number }}
+          path: cloudflare-backup/
+          if-no-files-found: ignore
+          retention-days: 90
