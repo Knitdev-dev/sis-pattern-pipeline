@@ -2456,10 +2456,16 @@ export default {
       const top = result.dec_top_plain, gap = result.dec_every_nth - 1, n = result.dec_rounds;
       const rw = (k) => k + (k === 1 ? ' round' : ' rounds');
       const pre = top > 0 ? 'Knit ' + rw(top) + ', then: ' : '';
-      const inner = 'Knit ' + rw(gap) + ', then work the decrease round as follows: ' +
-        'K1, ssk, knit to last 3 sts, k2tog, k1 (2 sts decreased)';
+      // Two decrease rounds (k2tog before BOR, then ssk after BOR on the next
+      // round), so the decreases do not stack on the same round. Each repeat is
+      // still dec_every_nth rounds: (gap - 1) plain + 2 decrease rounds.
+      const decs = 'work 2 decrease rounds as follows: knit to last 3 sts, k2tog, k1; ' +
+        'on the next round, k1, ssk, knit to end of round (2 sts decreased)';
+      const inner = gap > 1 ? 'Knit ' + rw(gap - 1) + ', then ' + decs
+                            : decs.charAt(0).toUpperCase() + decs.slice(1);
       result.sleeve_dec_text = n <= 0 ? '' : pre + (n === 1 ? inner + '.'
-        : '**' + inner + '.** Repeat ** to ** a total of <strong>' + n + '</strong> times.');
+        : '**' + inner + '.** Repeat ** to ** a total of <strong>' + n + '</strong> times.') +
+        ' This way the decreases are aligned; otherwise they would sit one on top of another.';
     }
     // Blocking is done flat, so the pattern gives the half-circumference width.
     result.finished_half_chest_cm = +(result.finished_chest_cm / 2).toFixed(1);
